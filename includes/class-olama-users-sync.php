@@ -1,0 +1,303 @@
+<?php
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+class Olama_Users_Sync {
+    public function preview($type) {
+        return $this->run($type, false);
+    }
+
+    public function apply($type) {
+        return $this->run($type, true);
+    }
+
+    private function run($type, $apply) {
+        $records = 'family' === $type ? $this->family_records() : $this->employee_records();
+        if (is_wp_error($records)) {
+            return $records;
+        }
+        $summary = array('scanned' => 0, 'create' => 0, 'update' => 0, 'unchanged' => 0, 'suspend' => 0, 'conflict' => 0, 'invalid' => 0, 'failed' => 0, 'events' => array());
+        $active_identifiers = array();
+        foreach ($records as $record) {
+            $summary['scanned']++;
+            $identifier_key = 'family' === $type ? 'oracle_family_id' : 'employee_id';
+            $result = 'family' === $type ? $this->process_family($record, $apply) : $this->process_employee($record, $apply);
+            $status = isset($result['status']) ? $result['status'] : 'failed';
+            // A valid source record remains eligible even if provisioning has a
+            // temporary write failure. Only invalid source data may trigger the
+            // missing-identity lifecycle pass for that identifier.
+            if ('invalid' !== $status && isset($record[$identifier_key]) && '' !== (string) $record[$identifier_key]) {
+                $active_identifiers[] = (string) $record[$identifier_key];
+            }
+            if (isset($summary[$status])) {
+                $summary[$status]++;
+            } else {
+                $summary['failed']++;
+            }
+            if (count($summary['events']) < 200) {
+                $summary['events'][] = $result;
+            }
+        }
+        if (in_array($type, array('family', 'employee'), true)) {
+            foreach ($this->missing_identity_results($type, $active_identifiers, $apply) as $result) {
+                $status = isset($result['status']) ? $result['status'] : 'failed';
+                if (isset($summary[$status])) {
+                    $summary[$status]++;
+                } else {
+                    $summary['failed']++;
+                }
+                if (count($summary['events']) < 200) {
+                    $summary['events'][] = $result;
+                }
+            }
+        }
+        return $summary;
+    }
+
+    private function missing_identity_results($type, array $active_identifiers, $apply) {
+        global $wpdb;
+        $type = 'family' === $type ? 'family' : 'employee';
+        $active_identifiers = array_values(array_unique(array_map('strval', $active_identifiers)));
+        if (!$active_identifiers) {
+            return array();
+        }
+
+        $placeholders = implode(',', array_fill(0, count($active_identifiers), '%s'));
+        $params = array_merge(array($type, 'active'), $active_identifiers);
+        $identities = $wpdb->get_results($wpdb->prepare(
+            'SELECT * FROM `' . esc_sql(Olama_Users_DB::identities_table()) . '` WHERE identity_type=%s AND account_status=%s AND oracle_identifier NOT IN (' . $placeholders . ') ORDER BY id ASC',
+            $params
+        ), ARRAY_A);
+
+        $results = array();
+        foreach ($identities as $identity) {
+            $user = get_userdata(absint($identity['wp_user_id']));
+            if (!$user) {
+                continue;
+            }
+            if (user_can($user, 'manage_options')) {
+                $results[] = array(
+                    'status' => 'conflict',
+                    'identifier' => $identity['oracle_identifier'],
+                    'username' => $user->user_login,
+                    'message' => __('Privileged technical administrators are never suspended automatically.', 'olama-users'),
+                );
+                continue;
+            }
+            if ($apply) {
+                $saved = Olama_Users_DB::save_identity($user->ID, $type, $identity['oracle_identifier'], 'suspended');
+                if (is_wp_error($saved)) {
+                    $results[] = array(
+                        'status' => 'failed',
+                        'identifier' => $identity['oracle_identifier'],
+                        'username' => $user->user_login,
+                        'message' => $saved->get_error_message(),
+                    );
+                    continue;
+                }
+                if (class_exists('WP_Session_Tokens')) {
+                    WP_Session_Tokens::get_instance($user->ID)->destroy_all();
+                }
+                $reason = 'family' === $type
+                    ? 'missing_from_eligible_core_family_directory'
+                    : 'missing_from_active_core_employee_directory';
+                Olama_Users_DB::audit('account_suspended', $user->ID, $type, $identity['oracle_identifier'], 'success', array('reason' => $reason));
+            }
+            $is_family = 'family' === $type;
+            $results[] = array(
+                'status' => 'suspend',
+                'identifier' => $identity['oracle_identifier'],
+                'username' => $user->user_login,
+                'message' => $is_family
+                    ? ($apply
+                        ? __('Suspended because the family is no longer eligible in Core for the active academic year.', 'olama-users')
+                        : __('Will suspend: family is no longer eligible in Core for the active academic year.', 'olama-users'))
+                    : ($apply
+                        ? __('Suspended because the employee is no longer active in Core.', 'olama-users')
+                        : __('Will suspend: employee is no longer active in Core.', 'olama-users')),
+            );
+        }
+        return $results;
+    }
+
+    private function active_study_year() {
+        if (class_exists('Olama_School_Academic')) {
+            $year = Olama_School_Academic::get_active_year();
+            if ($year && !empty($year->year_name)) {
+                return (string) $year->year_name;
+            }
+        }
+        if (class_exists('Olama_Oracle_Settings')) {
+            return (string) Olama_Oracle_Settings::get('default_study_year');
+        }
+        return '';
+    }
+
+    private function family_records() {
+        global $wpdb;
+        $year = $this->active_study_year();
+        if (!$year) {
+            return new WP_Error('missing_active_year', __('No active academic year is configured.', 'olama-users'));
+        }
+        $families = $wpdb->prefix . 'olama_core_families';
+        $years = $wpdb->prefix . 'olama_core_student_years';
+        return $wpdb->get_results($wpdb->prepare(
+            "SELECT f.oracle_family_id, f.sponsor_full_name, f.father_name, f.mother_name, f.mother_mobile
+             FROM `" . esc_sql($families) . "` f
+             INNER JOIN `" . esc_sql($years) . "` y ON y.oracle_family_id=f.oracle_family_id
+             WHERE y.study_year=%s AND (y.student_status='1' OR UPPER(y.student_status)='ACTIVE')
+             GROUP BY f.id, f.oracle_family_id, f.sponsor_full_name, f.father_name, f.mother_name, f.mother_mobile
+             ORDER BY CAST(f.oracle_family_id AS UNSIGNED)",
+            $year
+        ), ARRAY_A);
+    }
+
+    private function employee_records() {
+        if (!function_exists('olama_core') || !method_exists(olama_core(), 'employees')) {
+            return new WP_Error('core_employees_missing', __('The OLAMA Core employee directory is unavailable.', 'olama-users'));
+        }
+        $employees = olama_core()->employees()->active(array('limit' => 1000, 'offset' => 0));
+        if (!$employees) {
+            return new WP_Error('core_employees_empty', __('No active employees are stored in OLAMA Core. Run the employee import in Olama Oracle Sync first.', 'olama-users'));
+        }
+        return $employees;
+    }
+
+    private function process_family(array $record, $apply) {
+        $id = isset($record['oracle_family_id']) ? trim((string) $record['oracle_family_id']) : '';
+        $phone = $this->normalize_phone(isset($record['mother_mobile']) ? $record['mother_mobile'] : '');
+        if (!preg_match('/^\d+$/', $id) || !$this->valid_jordan_mobile($phone)) {
+            return array('status' => 'invalid', 'identifier' => $id, 'message' => __('Invalid family ID or mother mobile.', 'olama-users'));
+        }
+        $name = $this->first_value($record, array('sponsor_full_name', 'father_name', 'mother_name'));
+        return $this->provision('family', $id, $id, $name ?: sprintf(__('Family %s', 'olama-users'), $id), 'olama_family', $phone, $record, $apply);
+    }
+
+    private function process_employee(array $record, $apply) {
+        $id = isset($record['employee_id']) ? trim((string) $record['employee_id']) : '';
+        if (!preg_match('/^\d+$/', $id)) {
+            return array('status' => 'invalid', 'identifier' => $id, 'message' => __('Invalid employee ID.', 'olama-users'));
+        }
+        $status = isset($record['employee_status']) ? trim((string) $record['employee_status']) : '';
+        if ('مستمر' !== $status) {
+            return array('status' => 'invalid', 'identifier' => $id, 'message' => __('Employee is not active.', 'olama-users'));
+        }
+        $username = 'emp' . $id;
+        $name = isset($record['full_name']) ? trim((string) $record['full_name']) : $username;
+        return $this->provision('employee', $id, $username, $name, 'olama_employee_no_access', null, $record, $apply);
+    }
+
+    private function provision($type, $identifier, $username, $display_name, $default_role, $password, array $record, $apply) {
+        $identity = Olama_Users_DB::get_identity($type, $identifier);
+        $user = $identity ? get_userdata(absint($identity['wp_user_id'])) : false;
+        $adopting = false;
+        if (!$identity) {
+            $collision = get_user_by('login', $username);
+            if ($collision) {
+                if (!$this->can_adopt_existing($collision, $type, $identifier)) {
+                    return array('status' => 'conflict', 'identifier' => $identifier, 'message' => __('Username belongs to an unrelated or privileged WordPress user.', 'olama-users'));
+                }
+                $user = $collision;
+                $adopting = true;
+            }
+        }
+        $operation = $user ? 'update' : 'create';
+        if (!$apply) {
+            return array('status' => $operation, 'identifier' => $identifier, 'username' => $username, 'message' => $adopting ? __('Adopt verified legacy account', 'olama-users') : ucfirst($operation));
+        }
+
+        if (!$user) {
+            $user_id = wp_insert_user(array(
+                'user_login' => $username,
+                'user_pass' => null !== $password ? $password : wp_generate_password(64, true, true),
+                'display_name' => $display_name,
+                'role' => $default_role,
+            ));
+            if (is_wp_error($user_id)) {
+                Olama_Users_DB::audit('account_create_failed', 0, $type, $identifier, 'failed', array('code' => $user_id->get_error_code()));
+                return array('status' => 'failed', 'identifier' => $identifier, 'message' => $user_id->get_error_message());
+            }
+            $user = get_userdata($user_id);
+        } else {
+            $user_id = $user->ID;
+            wp_update_user(array('ID' => $user_id, 'display_name' => $display_name));
+            if ('family' === $type && !in_array('olama_family', (array) $user->roles, true)) {
+                $user->add_role('olama_family');
+            }
+            if ('family' === $type && null !== $password && !wp_check_password($password, $user->user_pass, $user_id)) {
+                wp_set_password($password, $user_id);
+            }
+        }
+
+        $saved = Olama_Users_DB::save_identity($user_id, $type, $identifier, 'active');
+        if (is_wp_error($saved)) {
+            return array('status' => 'failed', 'identifier' => $identifier, 'message' => $saved->get_error_message());
+        }
+        if ('employee' === $type && function_exists('olama_core')) {
+            $staff_saved = olama_core()->staff()->save($user_id, array(
+                'employee_id' => $identifier,
+                'phone_number' => isset($record['phones']) ? $record['phones'] : '',
+            ));
+            if (is_wp_error($staff_saved)) {
+                return array('status' => 'failed', 'identifier' => $identifier, 'message' => $staff_saved->get_error_message());
+            }
+        }
+        Olama_Users_DB::audit('account_' . $operation . 'd', $user_id, $type, $identifier, 'success', array('username' => $username));
+        return array('status' => $operation, 'identifier' => $identifier, 'username' => $username, 'message' => ucfirst($operation) . 'd');
+    }
+
+    private function can_adopt_existing(WP_User $user, $type, $identifier) {
+        if (user_can($user, 'manage_options')) {
+            return false;
+        }
+        if ('family' === $type) {
+            return (bool) array_intersect(array('family', 'student', 'olama_family'), (array) $user->roles);
+        }
+        if ('employee' !== $type) {
+            return false;
+        }
+        global $wpdb;
+        $staff_table = $wpdb->prefix . 'olama_core_staff_profiles';
+        $staff_employee_id = $wpdb->get_var($wpdb->prepare(
+            'SELECT employee_id FROM `' . esc_sql($staff_table) . '` WHERE user_id=%d LIMIT 1',
+            $user->ID
+        ));
+        if ('' !== (string) $staff_employee_id) {
+            return (string) $staff_employee_id === (string) $identifier;
+        }
+
+        // Legacy OLAMA employee accounts predate the shared staff mapping.
+        // Exact emp{Oracle ID} usernames plus a known employee role are enough
+        // to adopt non-privileged accounts while preserving their current roles.
+        $expected_username = 'emp' . (string) $identifier;
+        $legacy_employee_roles = array('teacher', 'assistant', 'editor', 'accountant', 'supervisor', 'author', 'olama_teacher');
+        return $user->user_login === $expected_username
+            && (bool) array_intersect($legacy_employee_roles, (array) $user->roles);
+    }
+
+    private function normalize_phone($value) {
+        $value = strtr((string) $value, array('٠'=>'0','١'=>'1','٢'=>'2','٣'=>'3','٤'=>'4','٥'=>'5','٦'=>'6','٧'=>'7','٨'=>'8','٩'=>'9','۰'=>'0','۱'=>'1','۲'=>'2','۳'=>'3','۴'=>'4','۵'=>'5','۶'=>'6','۷'=>'7','۸'=>'8','۹'=>'9'));
+        $digits = preg_replace('/\D+/', '', $value);
+        if (0 === strpos($digits, '00962')) {
+            $digits = '0' . substr($digits, 5);
+        } elseif (0 === strpos($digits, '962')) {
+            $digits = '0' . substr($digits, 3);
+        }
+        return $digits;
+    }
+
+    private function valid_jordan_mobile($phone) {
+        return (bool) preg_match('/^07[789]\d{7}$/', $phone);
+    }
+
+    private function first_value(array $record, array $keys) {
+        foreach ($keys as $key) {
+            if (!empty($record[$key])) {
+                return trim((string) $record[$key]);
+            }
+        }
+        return '';
+    }
+}
