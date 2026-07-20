@@ -2,7 +2,7 @@
 /**
  * Plugin Name: OLAMA Users
  * Description: Central OLAMA identities, account provisioning, roles, and functionality access.
- * Version: 0.2.0
+ * Version: 0.6.0
  * Author: Olama
  * Text Domain: olama-users
  */
@@ -11,7 +11,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('OLAMA_USERS_VERSION', '0.2.0');
+define('OLAMA_USERS_VERSION', '0.6.0');
 define('OLAMA_USERS_FILE', __FILE__);
 define('OLAMA_USERS_PATH', plugin_dir_path(__FILE__));
 define('OLAMA_USERS_URL', plugin_dir_url(__FILE__));
@@ -41,4 +41,8 @@ function olama_users_get_identity($user_id) {
 function olama_users_can($capability, $user_id = 0) {
     $user_id = $user_id ? absint($user_id) : get_current_user_id();
     return $user_id > 0 && user_can($user_id, sanitize_key($capability));
+}
+
+function olama_users_role_is_deleted($role_key) {
+    return Olama_Users_Roles::is_deleted($role_key);
 }
