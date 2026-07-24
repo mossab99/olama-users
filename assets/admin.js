@@ -27,6 +27,18 @@
 
         capabilities.forEach(function (checkbox) {
             checkbox.addEventListener('change', updateSelectAll);
+            checkbox.addEventListener('change', function () {
+                var capability = checkbox.getAttribute('data-capability');
+                if (!capability) {
+                    return;
+                }
+                capabilities.forEach(function (matchingCheckbox) {
+                    if (matchingCheckbox !== checkbox && matchingCheckbox.getAttribute('data-capability') === capability) {
+                        matchingCheckbox.checked = checkbox.checked;
+                    }
+                });
+                updateSelectAll();
+            });
         });
 
         updateSelectAll();

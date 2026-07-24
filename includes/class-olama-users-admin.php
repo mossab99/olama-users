@@ -452,10 +452,9 @@ class Olama_Users_Admin {
         echo '<form class="olama-capability-form" method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="olama_users_save_matrix"><input type="hidden" name="role_key" value="' . esc_attr($role_key) . '"><input type="hidden" name="plugin_id" value="' . esc_attr($plugin_id) . '">';
         wp_nonce_field('olama_users_save_matrix');
         echo '<table class="widefat striped olama-capability-table"><thead><tr><th>' . esc_html__('Functionality', 'olama-users') . '</th><th><label class="olama-select-all-label"><input type="checkbox" class="olama-cap-select-all"><span>' . esc_html__('Select all', 'olama-users') . '</span></label></th></tr></thead><tbody>';
-        $seen = array();
-        $this->capability_row($module['label'], $module['capability'], $role_key, 0, 'plugin', $seen);
+        $this->capability_row($module['label'], $module['capability'], $role_key, 0, 'plugin');
         foreach ($module['items'] as $item) {
-            $this->capability_item($item, $role_key, 1, $seen);
+            $this->capability_item($item, $role_key, 1);
         }
         echo '</tbody></table><p><button class="button button-primary">' . esc_html__('Save capabilities', 'olama-users') . '</button></p></form></section></div></div>';
     }
@@ -500,34 +499,32 @@ class Olama_Users_Admin {
         echo '<p><button class="button button-primary">' . esc_html__('Save import settings', 'olama-users') . '</button></p></form></section></div>';
     }
 
-    private function capability_item(array $item, $role_key, $depth, array &$seen) {
+    private function capability_item(array $item, $role_key, $depth) {
         if (!empty($item['capability'])) {
             $this->capability_row(
                 isset($item['label']) ? $item['label'] : $item['capability'],
                 $item['capability'],
                 $role_key,
                 $depth,
-                isset($item['type']) ? $item['type'] : 'function',
-                $seen
+                isset($item['type']) ? $item['type'] : 'function'
             );
         }
-        foreach (array('tabs', 'actions', 'items') as $key) {
+        foreach (array('submenus', 'tabs', 'actions', 'items') as $key) {
             if (empty($item[$key]) || !is_array($item[$key])) {
                 continue;
             }
             foreach ($item[$key] as $child) {
-                $this->capability_item($child, $role_key, $depth + 1, $seen);
+                $this->capability_item($child, $role_key, $depth + 1);
             }
         }
     }
 
-    private function capability_row($label, $capability, $role_key, $depth, $type, array &$seen) {
+    private function capability_row($label, $capability, $role_key, $depth, $type) {
         $capability = sanitize_key($capability);
-        if (!$capability || isset($seen[$capability])) {
+        if (!$capability) {
             return;
         }
-        $seen[$capability] = true;
-        echo '<tr class="is-' . esc_attr($type) . '"><td style="padding-inline-start:' . esc_attr(16 + ($depth * 24)) . 'px"><span class="olama-cap-type">' . esc_html(ucfirst($type)) . '</span><strong>' . esc_html($label) . '</strong><code>' . esc_html($capability) . '</code></td><td><label><input type="checkbox" name="caps[]" value="' . esc_attr($capability) . '" ' . checked(Olama_Users_Roles::role_has_declared_capability($role_key, $capability), true, false) . '><span class="screen-reader-text">' . esc_html(sprintf(__('Allow %s', 'olama-users'), $label)) . '</span></label></td></tr>';
+        echo '<tr class="is-' . esc_attr($type) . '"><td style="padding-inline-start:' . esc_attr(16 + ($depth * 24)) . 'px"><span class="olama-cap-type">' . esc_html(ucfirst($type)) . '</span><strong>' . esc_html($label) . '</strong><code>' . esc_html($capability) . '</code></td><td><label><input type="checkbox" name="caps[]" value="' . esc_attr($capability) . '" data-capability="' . esc_attr($capability) . '" ' . checked(Olama_Users_Roles::role_has_declared_capability($role_key, $capability), true, false) . '><span class="screen-reader-text">' . esc_html(sprintf(__('Allow %s', 'olama-users'), $label)) . '</span></label></td></tr>';
     }
 
     public function audit() {

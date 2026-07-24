@@ -33,6 +33,7 @@ final class Olama_Users_Plugin {
         add_filter('wp_authenticate_user', array($this, 'block_suspended_user'), 20, 2);
         add_filter('olama_dashboard_cards', array($this, 'register_hub_card'), 30);
         add_action('olama_users_register_modules', array($this, 'register_access_module'));
+        add_action('admin_menu', array('Olama_Users_Registry', 'discover_admin_menus'), PHP_INT_MAX);
         if (is_admin()) {
             new Olama_Users_Admin(new Olama_Users_Sync());
         }
