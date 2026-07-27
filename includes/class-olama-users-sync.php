@@ -146,14 +146,11 @@ class Olama_Users_Sync {
     }
 
     private function active_study_year() {
-        if (class_exists('Olama_School_Academic')) {
-            $year = Olama_School_Academic::get_active_year();
-            if ($year && !empty($year->year_name)) {
-                return (string) $year->year_name;
+        if (function_exists('olama_core') && method_exists(olama_core(), 'academic_context')) {
+            $year = olama_core()->academic_context()->current_year();
+            if ($year) {
+                return (string) (!empty($year->code) ? $year->code : $year->year_name);
             }
-        }
-        if (class_exists('Olama_Oracle_Settings')) {
-            return (string) Olama_Oracle_Settings::get('default_study_year');
         }
         return '';
     }
