@@ -156,22 +156,14 @@ class Olama_Users_Sync {
     }
 
     private function family_records() {
-        global $wpdb;
         $year = $this->active_study_year();
         if (!$year) {
             return new WP_Error('missing_active_year', __('No active academic year is configured.', 'olama-users'));
         }
-        $families = $wpdb->prefix . 'olama_core_families';
-        $years = $wpdb->prefix . 'olama_core_student_years';
-        return $wpdb->get_results($wpdb->prepare(
-            "SELECT f.oracle_family_id, f.sponsor_full_name, f.father_name, f.mother_name, f.mother_mobile
-             FROM `" . esc_sql($families) . "` f
-             INNER JOIN `" . esc_sql($years) . "` y ON y.oracle_family_id=f.oracle_family_id
-             WHERE y.study_year=%s AND (y.student_status='1' OR UPPER(y.student_status)='ACTIVE')
-             GROUP BY f.id, f.oracle_family_id, f.sponsor_full_name, f.father_name, f.mother_name, f.mother_mobile
-             ORDER BY CAST(f.oracle_family_id AS UNSIGNED)",
-            $year
-        ), ARRAY_A);
+        if (!function_exists('olama_core') || !method_exists(olama_core()->families(), 'active_for_study_year')) {
+            return new WP_Error('core_family_directory_missing', __('The OLAMA Core family directory is unavailable.', 'olama-users'));
+        }
+        return olama_core()->families()->active_for_study_year($year);
     }
 
     private function employee_records() {
@@ -367,7 +359,7 @@ class Olama_Users_Sync {
             return false;
         }
         global $wpdb;
-        $staff_table = $wpdb->prefix . 'olama_core_staff_profiles';
+        $staff_table = olama_core()->read_models()->table('staff_profiles');
         $staff_employee_id = $wpdb->get_var($wpdb->prepare(
             'SELECT employee_id FROM `' . esc_sql($staff_table) . '` WHERE user_id=%d LIMIT 1',
             $user->ID
