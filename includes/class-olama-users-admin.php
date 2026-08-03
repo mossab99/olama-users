@@ -76,6 +76,7 @@ class Olama_Users_Admin {
             wp_die(esc_html($result->get_error_message()), '', array('response' => 400));
         }
         Olama_Users_DB::audit('role_capabilities_updated', 0, 'local_system', $role_key, 'success', $result);
+        do_action('olama_users_capabilities_updated', $role_key, $plugin_id, $result);
         wp_safe_redirect(add_query_arg(array('page' => 'olama-users-matrix', 'role' => $role_key, 'plugin' => $plugin_id, 'updated' => 1), admin_url('admin.php')));
         exit;
     }

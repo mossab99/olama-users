@@ -22,6 +22,26 @@ class Olama_Users_Registry {
         }
     }
 
+    /**
+     * Rebuild the module/action registry from every currently loaded plugin.
+     *
+     * @return array Summary of the refreshed registry.
+     */
+    public static function refresh() {
+        self::$modules = array();
+        self::$loaded = false;
+        self::load();
+
+        if (is_admin() && did_action('admin_menu')) {
+            self::discover_admin_menus();
+        }
+
+        return array(
+            'modules' => count(self::$modules),
+            'capabilities' => count(self::capabilities()),
+        );
+    }
+
     public static function register(array $definition) {
         $id = isset($definition['id']) ? sanitize_key($definition['id']) : '';
         $capability = isset($definition['capability']) ? sanitize_key($definition['capability']) : '';
