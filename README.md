@@ -16,7 +16,7 @@ OLAMA Users is the central WordPress identity, account provisioning, role, and p
 - OLAMA Users is the only authority allowed to create OLAMA roles, assign users to roles, and grant declared plugin capabilities.
 - Access is denied by default for every non-Administrator. A user must receive an OLAMA-approved role and that role must be granted the selected plugin capability through the Capabilities screen.
 - Undeclared `olama_` and `os_` services are denied to non-Administrators, forcing plugins to register their functionality with OLAMA Users before access can be granted.
-- Family and employee synchronization previews show the resolved WordPress display name, and synchronization writes that name to `wp_users.display_name` on both account creation and update.
+- Family and employee synchronization previews show the resolved WordPress display name. On both account creation and update, synchronization writes the full display name and populates WordPress' native first-name and last-name profile fields from the canonical full name.
 - Password settings allow an optional prefix for each identity type. Family passwords use `prefix + normalized mother mobile`; employee passwords use `prefix + normalized employee mobile`. Apply synchronization updates matching existing accounts to the current formula without exposing passwords in results or logs.
 - Settings require explicit default roles for both family and employee imports. Preview remains available, but Apply is blocked until both selections point to valid non-Administrator roles.
 - Exam Management is the first plugin to declare its module, submenus, tabs, and sensitive actions to the access matrix.

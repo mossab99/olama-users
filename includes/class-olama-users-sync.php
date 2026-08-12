@@ -238,6 +238,7 @@ class Olama_Users_Sync {
         if ('' === $display_name) {
             $display_name = $username;
         }
+        $profile_name = $this->profile_name($display_name);
         $identity = Olama_Users_DB::get_identity($type, $identifier);
         $user = $identity ? get_userdata(absint($identity['wp_user_id'])) : false;
         $adopting = false;
@@ -269,10 +270,12 @@ class Olama_Users_Sync {
         }
 
         if (!$user) {
-            $user_id = Olama_Users_Roles::run_authorized(function() use ($username, $password, $display_name, $default_role) {
+            $user_id = Olama_Users_Roles::run_authorized(function() use ($username, $password, $display_name, $profile_name, $default_role) {
                 return wp_insert_user(array(
                     'user_login' => $username,
                     'user_pass' => null !== $password ? $password : wp_generate_password(64, true, true),
+                    'first_name' => $profile_name['first_name'],
+                    'last_name' => $profile_name['last_name'],
                     'display_name' => $display_name,
                     'role' => $default_role,
                 ));
@@ -290,7 +293,12 @@ class Olama_Users_Sync {
             $user = get_userdata($user_id);
         } else {
             $user_id = $user->ID;
-            $updated = wp_update_user(array('ID' => $user_id, 'display_name' => $display_name));
+            $updated = wp_update_user(array(
+                'ID' => $user_id,
+                'first_name' => $profile_name['first_name'],
+                'last_name' => $profile_name['last_name'],
+                'display_name' => $display_name,
+            ));
             if (is_wp_error($updated)) {
                 return array(
                     'status' => 'failed',
@@ -345,6 +353,19 @@ class Olama_Users_Sync {
             'username' => $username,
             'display_name' => $display_name,
             'message' => ucfirst($operation) . 'd',
+        );
+    }
+
+    /**
+     * Convert the canonical full name into WordPress' native profile fields.
+     * Core currently provides one full-name value, so keep every word by using
+     * the first word as the given name and the remainder as the last name.
+     */
+    private function profile_name($full_name) {
+        $parts = preg_split('/\s+/u', trim((string) $full_name), 2, PREG_SPLIT_NO_EMPTY);
+        return array(
+            'first_name' => isset($parts[0]) ? sanitize_text_field($parts[0]) : '',
+            'last_name' => isset($parts[1]) ? sanitize_text_field($parts[1]) : '',
         );
     }
 
