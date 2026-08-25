@@ -646,6 +646,12 @@ class Olama_Users_Roles {
         }
         $submitted = array_values(array_unique(array_map('sanitize_key', $submitted)));
         $granted = array_values(array_intersect($registered, $submitted));
+        $module = Olama_Users_Registry::get($plugin_id);
+        $parent_capability = $module && !empty($module['capability']) ? sanitize_key($module['capability']) : '';
+        if ($granted && $parent_capability && in_array($parent_capability, $registered, true)) {
+            $granted[] = $parent_capability;
+            $granted = array_values(array_unique($granted));
+        }
         foreach ($registered as $capability) {
             if (in_array($capability, $granted, true)) {
                 $role->add_cap($capability);
