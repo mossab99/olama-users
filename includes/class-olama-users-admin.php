@@ -11,6 +11,7 @@ class Olama_Users_Admin {
         $this->sync = $sync;
         add_action('admin_menu', array($this, 'menus'));
         add_action('admin_post_olama_users_sync', array($this, 'handle_sync'));
+        add_action('admin_post_olama_users_sync_action', array($this, 'handle_sync_action'));
         add_action('admin_post_olama_users_save_matrix', array($this, 'handle_matrix'));
         add_action('admin_post_olama_users_role_action', array($this, 'handle_role_action'));
         add_action('admin_post_olama_users_assign_role', array($this, 'handle_assign_role'));
@@ -60,6 +61,26 @@ class Olama_Users_Admin {
         $result = 'apply' === $mode ? $this->sync->apply($type) : $this->sync->preview($type);
         set_transient('olama_users_sync_' . get_current_user_id(), $result, 10 * MINUTE_IN_SECONDS);
         wp_safe_redirect(add_query_arg(array('page' => 'olama-users', 'type' => $type, 'mode' => $mode), admin_url('admin.php')));
+        exit;
+    }
+
+    public function handle_sync_action() {
+        if (!current_user_can('olama_users_sync_apply')) {
+            wp_die(esc_html__('You are not allowed to apply synchronization.', 'olama-users'), '', array('response' => 403));
+        }
+        check_admin_referer('olama_users_sync_action');
+        $type = isset($_POST['identity_type']) && 'employee' === $_POST['identity_type'] ? 'employee' : 'family';
+        $operation = isset($_POST['sync_operation']) && 'update' === $_POST['sync_operation'] ? 'update' : 'create';
+        $identifier = isset($_POST['identifier']) ? sanitize_text_field(wp_unslash($_POST['identifier'])) : '';
+        if (!Olama_Users_Roles::default_roles_ready()) {
+            $result = new WP_Error('default_roles_required', __('Assign valid default roles for both families and employees before applying synchronization.', 'olama-users'));
+        } elseif ($identifier) {
+            $result = $this->sync->apply_one($type, $identifier, $operation);
+        } else {
+            $result = $this->sync->apply_batch($type, $operation);
+        }
+        set_transient('olama_users_sync_' . get_current_user_id(), $result, 10 * MINUTE_IN_SECONDS);
+        wp_safe_redirect(add_query_arg(array('page' => 'olama-users', 'type' => $type, 'mode' => 'apply'), admin_url('admin.php')));
         exit;
     }
 
@@ -237,7 +258,7 @@ class Olama_Users_Admin {
     }
 
     private function render_sync_result($result) {
-        echo '<section class="olama-users-panel"><h2>' . esc_html__('Synchronization result', 'olama-users') . '</h2>';
+        echo '<section class="olama-users-panel"><h2>' . esc_html__('Synchronization status', 'olama-users') . '</h2>';
         if (is_wp_error($result)) {
             echo '<div class="notice notice-error inline"><p>' . esc_html($result->get_error_message()) . '</p></div></section>';
             return;
@@ -246,9 +267,31 @@ class Olama_Users_Admin {
         foreach (array('scanned', 'create', 'update', 'unchanged', 'suspend', 'conflict', 'invalid', 'failed') as $key) {
             echo '<div><span>' . esc_html(ucfirst($key)) . '</span><strong>' . esc_html(number_format_i18n((int) $result[$key])) . '</strong></div>';
         }
-        echo '</div><table class="widefat striped"><thead><tr><th>' . esc_html__('Result', 'olama-users') . '</th><th>' . esc_html__('Identifier', 'olama-users') . '</th><th>' . esc_html__('Username', 'olama-users') . '</th><th>' . esc_html__('Display name', 'olama-users') . '</th><th>' . esc_html__('Message', 'olama-users') . '</th></tr></thead><tbody>';
+        $type = isset($_GET['type']) && 'employee' === $_GET['type'] ? 'employee' : 'family';
+        $is_preview = !isset($_GET['mode']) || 'preview' === $_GET['mode'];
+        if ($is_preview && current_user_can('olama_users_sync_apply') && ($result['create'] || $result['update'])) {
+            echo '<div class="olama-sync-batch-actions"><strong>' . esc_html__('Batch actions', 'olama-users') . '</strong> ';
+            foreach (array('create' => __('Create users', 'olama-users'), 'update' => __('Update users', 'olama-users')) as $operation => $label) {
+                if (!$result[$operation]) {
+                    continue;
+                }
+                echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="olama_users_sync_action"><input type="hidden" name="identity_type" value="' . esc_attr($type) . '"><input type="hidden" name="sync_operation" value="' . esc_attr($operation) . '">';
+                wp_nonce_field('olama_users_sync_action');
+                echo '<button class="button" type="submit">' . esc_html($label) . ' (' . esc_html(number_format_i18n((int) $result[$operation])) . ')</button></form>';
+            }
+            echo '</div>';
+        }
+        echo '</div><table class="widefat striped"><thead><tr><th>' . esc_html__('Status', 'olama-users') . '</th><th>' . esc_html__('Identifier', 'olama-users') . '</th><th>' . esc_html__('Username', 'olama-users') . '</th><th>' . esc_html__('Display name', 'olama-users') . '</th><th>' . esc_html__('Action', 'olama-users') . '</th></tr></thead><tbody>';
         foreach ($result['events'] as $event) {
-            echo '<tr><td>' . esc_html($event['status']) . '</td><td><code>' . esc_html($event['identifier']) . '</code></td><td><code>' . esc_html(isset($event['username']) ? $event['username'] : '') . '</code></td><td><strong>' . esc_html(isset($event['display_name']) ? $event['display_name'] : '') . '</strong></td><td>' . esc_html($event['message']) . '</td></tr>';
+            echo '<tr><td>' . esc_html(ucfirst($event['status'])) . '</td><td><code>' . esc_html($event['identifier']) . '</code></td><td><code>' . esc_html(isset($event['username']) ? $event['username'] : '') . '</code></td><td><strong>' . esc_html(isset($event['display_name']) ? $event['display_name'] : '') . '</strong></td><td>';
+            if ($is_preview && current_user_can('olama_users_sync_apply') && in_array($event['status'], array('create', 'update'), true)) {
+                echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="olama_users_sync_action"><input type="hidden" name="identity_type" value="' . esc_attr($type) . '"><input type="hidden" name="sync_operation" value="' . esc_attr($event['status']) . '"><input type="hidden" name="identifier" value="' . esc_attr($event['identifier']) . '">';
+                wp_nonce_field('olama_users_sync_action');
+                echo '<button class="button button-small" type="submit">' . esc_html('create' === $event['status'] ? __('Create user', 'olama-users') : __('Update user', 'olama-users')) . '</button></form>';
+            } else {
+                echo '&mdash;';
+            }
+            echo '</td></tr>';
         }
         echo '</tbody></table></section>';
     }

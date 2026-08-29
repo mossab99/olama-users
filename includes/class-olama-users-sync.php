@@ -33,6 +33,63 @@ class Olama_Users_Sync {
         return $this->run($type, true);
     }
 
+    /** Apply one previewable create/update operation without running the lifecycle pass. */
+    public function apply_one($type, $identifier, $operation) {
+        $records = 'family' === $type ? $this->family_records() : $this->employee_records();
+        if (is_wp_error($records)) {
+            return $records;
+        }
+        $identifier_key = 'family' === $type ? 'oracle_family_id' : 'employee_id';
+        foreach ($records as $record) {
+            if ((string) $identifier === trim((string) (isset($record[$identifier_key]) ? $record[$identifier_key] : ''))) {
+                $preview = 'family' === $type ? $this->process_family($record, false) : $this->process_employee($record, false);
+                if (!isset($preview['status']) || $preview['status'] !== $operation) {
+                    return new WP_Error('sync_operation_mismatch', __('The requested action no longer matches the current account status. Refresh the preview and try again.', 'olama-users'));
+                }
+                return $this->result_for_event('family' === $type ? $this->process_family($record, true) : $this->process_employee($record, true));
+            }
+        }
+        return new WP_Error('sync_identifier_missing', __('The selected source record is no longer available. Refresh the preview and try again.', 'olama-users'));
+    }
+
+    /** Apply all current records whose preview status matches the requested operation. */
+    public function apply_batch($type, $operation) {
+        $records = 'family' === $type ? $this->family_records() : $this->employee_records();
+        if (is_wp_error($records)) {
+            return $records;
+        }
+        $summary = array('scanned' => 0, 'create' => 0, 'update' => 0, 'unchanged' => 0, 'suspend' => 0, 'conflict' => 0, 'invalid' => 0, 'failed' => 0, 'events' => array());
+        foreach ($records as $record) {
+            $preview = 'family' === $type ? $this->process_family($record, false) : $this->process_employee($record, false);
+            if (!isset($preview['status']) || $preview['status'] !== $operation) {
+                continue;
+            }
+            $summary['scanned']++;
+            $event = 'family' === $type ? $this->process_family($record, true) : $this->process_employee($record, true);
+            $status = isset($event['status']) ? $event['status'] : 'failed';
+            if (isset($summary[$status])) {
+                $summary[$status]++;
+            } else {
+                $summary['failed']++;
+            }
+            if (count($summary['events']) < 200) {
+                $summary['events'][] = $event;
+            }
+        }
+        return $summary;
+    }
+
+    private function result_for_event(array $event) {
+        $summary = array('scanned' => 1, 'create' => 0, 'update' => 0, 'unchanged' => 0, 'suspend' => 0, 'conflict' => 0, 'invalid' => 0, 'failed' => 0, 'events' => array($event));
+        $status = isset($event['status']) ? $event['status'] : 'failed';
+        if (isset($summary[$status])) {
+            $summary[$status]++;
+        } else {
+            $summary['failed']++;
+        }
+        return $summary;
+    }
+
     private function run($type, $apply) {
         $records = 'family' === $type ? $this->family_records() : $this->employee_records();
         if (is_wp_error($records)) {
