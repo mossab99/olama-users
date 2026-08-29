@@ -463,11 +463,11 @@ class Olama_Users_Sync {
                 $grade = !empty($classes[$student_uid]['grade']) ? $this->short_class_name($classes[$student_uid]['grade']) : '';
                 $section = !empty($classes[$student_uid]['section']) ? $classes[$student_uid]['section'] : '';
                 $student_parts = array_filter(array($student_first_name, $grade, $section), 'strlen');
-                $students[] = implode(' - ', $student_parts);
+                $students[] = implode(' ', $student_parts);
             }
         }
 
-        return 'عائلة ' . trim((string) $id) . ' ' . $label . ($students ? ' - ' . implode(' ', $students) : '');
+        return 'عائلة ' . trim((string) $id) . ' ' . $label . ($students ? ' - ' . implode(' - ', $students) : '');
     }
 
     private function short_student_name($student_name, $family_name) {
