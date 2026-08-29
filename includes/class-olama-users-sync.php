@@ -113,7 +113,7 @@ class Olama_Users_Sync {
             } else {
                 $summary['failed']++;
             }
-            if (count($summary['events']) < 200) {
+            if (count($summary['events']) < 200 || 'invalid' === $status) {
                 $summary['events'][] = $result;
             }
         }
