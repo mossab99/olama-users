@@ -295,8 +295,8 @@ class Olama_Users_Sync {
         if ('' === $display_name) {
             $display_name = $username;
         }
-        $profile_name = 'family' === $type && '' !== trim((string) $family_name)
-            ? array('first_name' => sanitize_text_field(trim((string) $family_name)), 'last_name' => '')
+        $profile_name = 'family' === $type
+            ? array('first_name' => $display_name, 'last_name' => '')
             : $this->profile_name($display_name);
         $identity = Olama_Users_DB::get_identity($type, $identifier);
         $user = $identity ? get_userdata(absint($identity['wp_user_id'])) : false;

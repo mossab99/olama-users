@@ -46,5 +46,37 @@
 
     document.addEventListener('DOMContentLoaded', function () {
         document.querySelectorAll('.olama-capability-form').forEach(initializeSelectAll);
+
+        document.querySelectorAll('[data-olama-modal-open]').forEach(function (trigger) {
+            trigger.addEventListener('click', function () {
+                var modal = document.getElementById(trigger.getAttribute('data-olama-modal-open'));
+                if (!modal) {
+                    return;
+                }
+                modal.setAttribute('aria-hidden', 'false');
+                document.body.classList.add('olama-modal-open');
+                modal.querySelector('.olama-modal-close').focus();
+            });
+        });
+
+        document.querySelectorAll('[data-olama-modal-close]').forEach(function (trigger) {
+            trigger.addEventListener('click', function () {
+                var modal = trigger.closest('.olama-modal');
+                if (modal) {
+                    modal.setAttribute('aria-hidden', 'true');
+                    document.body.classList.remove('olama-modal-open');
+                }
+            });
+        });
+
+        document.addEventListener('keydown', function (event) {
+            if (event.key !== 'Escape') {
+                return;
+            }
+            document.querySelectorAll('.olama-modal[aria-hidden="false"]').forEach(function (modal) {
+                modal.setAttribute('aria-hidden', 'true');
+                document.body.classList.remove('olama-modal-open');
+            });
+        });
     });
 }());

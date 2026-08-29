@@ -265,13 +265,9 @@ class Olama_Users_Admin {
             echo '<div class="notice notice-error inline"><p>' . esc_html($result->get_error_message()) . '</p></div></section>';
             return;
         }
-        echo '<div class="olama-users-summary">';
-        foreach (array('scanned', 'create', 'update', 'unchanged', 'suspend', 'conflict', 'invalid', 'failed') as $key) {
-            echo '<div><span>' . esc_html(ucfirst($key)) . '</span><strong>' . esc_html(number_format_i18n((int) $result[$key])) . '</strong></div>';
-        }
         $type = isset($_GET['type']) && 'employee' === $_GET['type'] ? 'employee' : 'family';
         if ($is_preview && current_user_can('olama_users_sync_apply') && ($result['create'] || $result['update'])) {
-            echo '<div class="olama-sync-batch-actions"><strong>' . esc_html__('Batch actions', 'olama-users') . '</strong> ';
+            echo '<div class="olama-sync-batch-actions"><strong>' . esc_html__('Batch actions', 'olama-users') . '</strong>';
             foreach (array('create' => __('Create users', 'olama-users'), 'update' => __('Update users', 'olama-users')) as $operation => $label) {
                 if (!$result[$operation]) {
                     continue;
@@ -281,6 +277,14 @@ class Olama_Users_Admin {
                 echo '<button class="button" type="submit">' . esc_html($label) . ' (' . esc_html(number_format_i18n((int) $result[$operation])) . ')</button></form>';
             }
             echo '</div>';
+        }
+        echo '<div class="olama-users-summary">';
+        foreach (array('scanned', 'create', 'update', 'unchanged', 'suspend', 'conflict', 'invalid', 'failed') as $key) {
+            if ('invalid' === $key && $result[$key]) {
+                echo '<button type="button" class="olama-summary-item is-invalid" data-olama-modal-open="olama-invalid-users"><span>' . esc_html(ucfirst($key)) . '</span><strong>' . esc_html(number_format_i18n((int) $result[$key])) . '</strong><small>' . esc_html__('View details', 'olama-users') . '</small></button>';
+            } else {
+                echo '<div class="olama-summary-item"><span>' . esc_html(ucfirst($key)) . '</span><strong>' . esc_html(number_format_i18n((int) $result[$key])) . '</strong></div>';
+            }
         }
         echo '</div><div class="olama-sync-table-wrap"><table class="widefat striped olama-sync-table"><thead><tr><th>' . esc_html__('Status', 'olama-users') . '</th><th>' . esc_html__('Username', 'olama-users') . '</th><th>' . esc_html__('Display name', 'olama-users') . '</th><th>' . esc_html__('Action', 'olama-users') . '</th></tr></thead><tbody>';
         foreach ($result['events'] as $event) {
@@ -294,7 +298,18 @@ class Olama_Users_Admin {
             }
             echo '</td></tr>';
         }
-        echo '</tbody></table></div></section>';
+        echo '</tbody></table></div>';
+        if ($result['invalid']) {
+            echo '<div id="olama-invalid-users" class="olama-modal" aria-hidden="true"><div class="olama-modal-backdrop" data-olama-modal-close></div><div class="olama-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="olama-invalid-users-title"><div class="olama-modal-heading"><h2 id="olama-invalid-users-title">' . esc_html__('Invalid users', 'olama-users') . '</h2><button type="button" class="olama-modal-close" data-olama-modal-close aria-label="' . esc_attr__('Close', 'olama-users') . '">&times;</button></div><div class="olama-invalid-list">';
+            foreach ($result['events'] as $event) {
+                if ('invalid' !== $event['status']) {
+                    continue;
+                }
+                echo '<article><strong>' . esc_html(isset($event['username']) ? $event['username'] : $event['identifier']) . '</strong><span>' . esc_html(isset($event['display_name']) ? $event['display_name'] : '') . '</span><p>' . esc_html(isset($event['message']) ? $event['message'] : '') . '</p></article>';
+            }
+            echo '</div></div></div>';
+        }
+        echo '</section>';
     }
 
     public function roles() {
