@@ -32,8 +32,9 @@ class Olama_Users_Admin {
         if (false === strpos($hook, 'olama-users')) {
             return;
         }
-        wp_enqueue_style('olama-users-admin', OLAMA_USERS_URL . 'assets/admin.css', array(), OLAMA_USERS_VERSION);
-        wp_enqueue_script('olama-users-admin', OLAMA_USERS_URL . 'assets/admin.js', array(), OLAMA_USERS_VERSION, true);
+        $asset_version = OLAMA_USERS_VERSION . '.' . (string) @filemtime(OLAMA_USERS_PATH . 'assets/admin.css');
+        wp_enqueue_style('olama-users-admin', OLAMA_USERS_URL . 'assets/admin.css', array(), $asset_version);
+        wp_enqueue_script('olama-users-admin', OLAMA_USERS_URL . 'assets/admin.js', array(), $asset_version, true);
     }
 
     public function handle_sync() {
@@ -281,9 +282,9 @@ class Olama_Users_Admin {
             }
             echo '</div>';
         }
-        echo '</div><div class="olama-sync-table-wrap"><table class="widefat striped olama-sync-table"><thead><tr><th>' . esc_html__('Status', 'olama-users') . '</th><th>' . esc_html__('Identifier', 'olama-users') . '</th><th>' . esc_html__('Username', 'olama-users') . '</th><th>' . esc_html__('Display name', 'olama-users') . '</th><th>' . esc_html__('Action', 'olama-users') . '</th></tr></thead><tbody>';
+        echo '</div><div class="olama-sync-table-wrap"><table class="widefat striped olama-sync-table"><thead><tr><th>' . esc_html__('Status', 'olama-users') . '</th><th>' . esc_html__('Username', 'olama-users') . '</th><th>' . esc_html__('Display name', 'olama-users') . '</th><th>' . esc_html__('Action', 'olama-users') . '</th></tr></thead><tbody>';
         foreach ($result['events'] as $event) {
-            echo '<tr><td>' . esc_html(ucfirst($event['status'])) . '</td><td><code>' . esc_html($event['identifier']) . '</code></td><td><code>' . esc_html(isset($event['username']) ? $event['username'] : '') . '</code></td><td><strong>' . esc_html(isset($event['display_name']) ? $event['display_name'] : '') . '</strong></td><td>';
+            echo '<tr><td>' . esc_html(ucfirst($event['status'])) . '</td><td><code>' . esc_html(isset($event['username']) ? $event['username'] : '') . '</code></td><td><strong>' . esc_html(isset($event['display_name']) ? $event['display_name'] : '') . '</strong></td><td>';
             if ($is_preview && current_user_can('olama_users_sync_apply') && in_array($event['status'], array('create', 'update'), true)) {
                 echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="olama_users_sync_action"><input type="hidden" name="identity_type" value="' . esc_attr($type) . '"><input type="hidden" name="sync_operation" value="' . esc_attr($event['status']) . '"><input type="hidden" name="identifier" value="' . esc_attr($event['identifier']) . '">';
                 wp_nonce_field('olama_users_sync_action');

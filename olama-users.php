@@ -2,7 +2,7 @@
 /**
  * Plugin Name: OLAMA Users
  * Description: Central OLAMA identities, account provisioning, roles, and functionality access.
- * Version: 0.6.3
+ * Version: 0.6.4
  * Author: Olama
  * Text Domain: olama-users
  */
@@ -11,7 +11,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('OLAMA_USERS_VERSION', '0.6.3');
+define('OLAMA_USERS_VERSION', '0.6.4');
 define('OLAMA_USERS_FILE', __FILE__);
 define('OLAMA_USERS_PATH', plugin_dir_path(__FILE__));
 define('OLAMA_USERS_URL', plugin_dir_url(__FILE__));

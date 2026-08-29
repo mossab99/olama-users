@@ -451,15 +451,36 @@ class Olama_Users_Sync {
             foreach ((array) $rows as $student) {
                 $student_name = is_array($student) ? (isset($student['student_name']) ? $student['student_name'] : '') : (isset($student->student_name) ? $student->student_name : '');
                 $student_uid = is_array($student) ? (isset($student['student_uid']) ? $student['student_uid'] : '') : (isset($student->student_uid) ? $student->student_uid : '');
-                $student_name = trim((string) $student_name);
+                $student_name = $this->short_student_name($student_name, $family_name);
                 if ('' === $student_name || ($classes && !isset($classes[$student_uid]))) {
                     continue;
                 }
-                $students[] = $student_name . (!empty($classes[$student_uid]) ? ' ' . $classes[$student_uid] : '');
+                $class_name = !empty($classes[$student_uid]) ? $this->short_class_name($classes[$student_uid]) : '';
+                $students[] = trim($student_name . ($class_name ? ' ' . $class_name : ''));
             }
         }
 
         return 'عائلة ' . trim((string) $id) . ' ' . $label . ($students ? ' - ' . implode(' ', $students) : '');
+    }
+
+    private function short_student_name($student_name, $family_name) {
+        $student_name = trim((string) $student_name);
+        $family_name = trim((string) $family_name);
+        if ($family_name && preg_match('/\s+' . preg_quote($family_name, '/') . '$/u', $student_name)) {
+            $student_name = trim((string) preg_replace('/\s+' . preg_quote($family_name, '/') . '$/u', '', $student_name));
+        }
+        return $student_name;
+    }
+
+    private function short_class_name($class_name) {
+        $class_name = trim((string) $class_name);
+        if (preg_match('/^تاسع\s+[اأ]ساسي$/u', $class_name)) {
+            return 'تاسع ب';
+        }
+        if (preg_match('/\s+[اأ]ساسي$/u', $class_name)) {
+            return trim((string) preg_replace('/\s+[اأ]ساسي$/u', ' أ', $class_name));
+        }
+        return $class_name;
     }
 
     private function can_adopt_existing(WP_User $user, $type, $identifier) {
