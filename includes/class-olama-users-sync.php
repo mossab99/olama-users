@@ -236,8 +236,8 @@ class Olama_Users_Sync {
 
     private function process_family(array $record, $apply) {
         $id = isset($record['oracle_family_id']) ? trim((string) $record['oracle_family_id']) : '';
-        $name = $this->first_value($record, array('sponsor_full_name', 'father_name', 'mother_name'));
-        $display_name = $name ?: sprintf(__('Family %s', 'olama-users'), $id);
+        $family_name = $this->first_value($record, array('sponsor_full_name', 'father_name', 'mother_name'));
+        $display_name = $this->family_display_name($id, $family_name, isset($record['family_uid']) ? $record['family_uid'] : '');
         $phone = $this->normalize_phone(isset($record['mother_mobile']) ? $record['mother_mobile'] : '');
         if (!preg_match('/^\d+$/', $id) || !$this->valid_jordan_mobile($phone)) {
             return array(
@@ -249,7 +249,7 @@ class Olama_Users_Sync {
             );
         }
         $password = self::build_password('family', $phone);
-        return $this->provision('family', $id, $id, $display_name, Olama_Users_Roles::default_role('family'), $password, $record, $apply);
+        return $this->provision('family', $id, $id, $display_name, Olama_Users_Roles::default_role('family'), $password, $record, $apply, $family_name);
     }
 
     private function process_employee(array $record, $apply) {
@@ -290,12 +290,14 @@ class Olama_Users_Sync {
         return $this->provision('employee', $id, $username, $display_name, Olama_Users_Roles::default_role('employee'), $password, $record, $apply);
     }
 
-    private function provision($type, $identifier, $username, $display_name, $default_role, $password, array $record, $apply) {
+    private function provision($type, $identifier, $username, $display_name, $default_role, $password, array $record, $apply, $family_name = '') {
         $display_name = sanitize_text_field(trim((string) $display_name));
         if ('' === $display_name) {
             $display_name = $username;
         }
-        $profile_name = $this->profile_name($display_name);
+        $profile_name = 'family' === $type && '' !== trim((string) $family_name)
+            ? array('first_name' => sanitize_text_field(trim((string) $family_name)), 'last_name' => '')
+            : $this->profile_name($display_name);
         $identity = Olama_Users_DB::get_identity($type, $identifier);
         $user = $identity ? get_userdata(absint($identity['wp_user_id'])) : false;
         $adopting = false;
@@ -424,6 +426,40 @@ class Olama_Users_Sync {
             'first_name' => isset($parts[0]) ? sanitize_text_field($parts[0]) : '',
             'last_name' => isset($parts[1]) ? sanitize_text_field($parts[1]) : '',
         );
+    }
+
+    /** Build the family label used in WordPress and in the synchronization preview. */
+    private function family_display_name($id, $family_name, $family_uid) {
+        $family_name = trim((string) $family_name);
+        $label = $family_name ?: sprintf(__('Family %s', 'olama-users'), $id);
+        $students = array();
+
+        $family_uid = $family_uid ?: ('ORA-FAM-' . trim((string) $id));
+        if ($family_uid && function_exists('olama_core') && method_exists(olama_core(), 'families')) {
+            $rows = olama_core()->families()->get_students($family_uid);
+            $year = $this->active_study_year();
+            $years = $year && method_exists(olama_core(), 'student_years')
+                ? olama_core()->student_years()->get_by_family($family_uid, $year)
+                : array();
+            $classes = array();
+            foreach ($years as $student_year) {
+                $student_uid = isset($student_year['student_uid']) ? (string) $student_year['student_uid'] : '';
+                if ($student_uid) {
+                    $classes[$student_uid] = trim((string) (isset($student_year['class_name']) ? $student_year['class_name'] : ''));
+                }
+            }
+            foreach ((array) $rows as $student) {
+                $student_name = is_array($student) ? (isset($student['student_name']) ? $student['student_name'] : '') : (isset($student->student_name) ? $student->student_name : '');
+                $student_uid = is_array($student) ? (isset($student['student_uid']) ? $student['student_uid'] : '') : (isset($student->student_uid) ? $student->student_uid : '');
+                $student_name = trim((string) $student_name);
+                if ('' === $student_name || ($classes && !isset($classes[$student_uid]))) {
+                    continue;
+                }
+                $students[] = $student_name . (!empty($classes[$student_uid]) ? ' ' . $classes[$student_uid] : '');
+            }
+        }
+
+        return 'عائلة ' . trim((string) $id) . ' ' . $label . ($students ? ' - ' . implode(' ', $students) : '');
     }
 
     private function can_adopt_existing(WP_User $user, $type, $identifier) {

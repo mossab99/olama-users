@@ -221,7 +221,7 @@ class Olama_Users_Admin {
         }
         global $wpdb;
         $counts = $wpdb->get_results('SELECT identity_type, account_status, COUNT(*) AS total FROM `' . esc_sql(Olama_Users_DB::identities_table()) . '` GROUP BY identity_type, account_status', ARRAY_A);
-        echo '<div class="wrap olama-users-wrap"><h1>' . esc_html__('OLAMA Users', 'olama-users') . '</h1><p>' . esc_html__('Create and maintain family and employee WordPress accounts from approved OLAMA sources.', 'olama-users') . '</p>';
+        echo '<div class="wrap olama-users-wrap"><div class="olama-users-hero"><div><span class="olama-eyebrow">' . esc_html__('Account centre', 'olama-users') . '</span><h1>' . esc_html__('OLAMA Users', 'olama-users') . '</h1><p>' . esc_html__('Create and maintain family and employee WordPress accounts from approved OLAMA sources.', 'olama-users') . '</p></div><span class="dashicons dashicons-groups"></span></div>';
         $default_roles_ready = Olama_Users_Roles::default_roles_ready();
         if (!$default_roles_ready) {
             echo '<div class="notice notice-warning inline"><p>' .
@@ -238,7 +238,7 @@ class Olama_Users_Admin {
                     $total += (int) $count['total'];
                 }
             }
-            echo '<section class="olama-users-card"><h2>' . esc_html($label) . '</h2><strong>' . esc_html(number_format_i18n($total)) . '</strong><p>' . esc_html__('Mapped WordPress accounts', 'olama-users') . '</p>';
+            echo '<section class="olama-users-card olama-users-card-' . esc_attr($type) . '"><div class="olama-card-top"><h2>' . esc_html($label) . '</h2><span class="dashicons ' . esc_attr('family' === $type ? 'dashicons-admin-home' : 'dashicons-id') . '"></span></div><strong>' . esc_html(number_format_i18n($total)) . '</strong><p>' . esc_html__('Mapped WordPress accounts', 'olama-users') . '</p><div class="olama-card-actions">';
             if (current_user_can('olama_users_sync_preview')) {
                 echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="olama_users_sync"><input type="hidden" name="identity_type" value="' . esc_attr($type) . '">';
                 wp_nonce_field('olama_users_sync');
@@ -248,7 +248,7 @@ class Olama_Users_Admin {
                 }
                 echo '</form>';
             }
-            echo '</section>';
+            echo '</div></section>';
         }
         echo '</div>';
         if (false !== $result) {
@@ -258,7 +258,8 @@ class Olama_Users_Admin {
     }
 
     private function render_sync_result($result) {
-        echo '<section class="olama-users-panel"><h2>' . esc_html__('Synchronization status', 'olama-users') . '</h2>';
+        $is_preview = !isset($_GET['mode']) || 'preview' === $_GET['mode'];
+        echo '<section class="olama-users-panel"><div class="olama-panel-heading"><div><span class="olama-eyebrow">' . esc_html__('Latest run', 'olama-users') . '</span><h2>' . esc_html__('Synchronization status', 'olama-users') . '</h2></div><span class="olama-sync-mode">' . esc_html($is_preview ? __('Preview mode', 'olama-users') : __('Applied', 'olama-users')) . '</span></div>';
         if (is_wp_error($result)) {
             echo '<div class="notice notice-error inline"><p>' . esc_html($result->get_error_message()) . '</p></div></section>';
             return;
@@ -268,7 +269,6 @@ class Olama_Users_Admin {
             echo '<div><span>' . esc_html(ucfirst($key)) . '</span><strong>' . esc_html(number_format_i18n((int) $result[$key])) . '</strong></div>';
         }
         $type = isset($_GET['type']) && 'employee' === $_GET['type'] ? 'employee' : 'family';
-        $is_preview = !isset($_GET['mode']) || 'preview' === $_GET['mode'];
         if ($is_preview && current_user_can('olama_users_sync_apply') && ($result['create'] || $result['update'])) {
             echo '<div class="olama-sync-batch-actions"><strong>' . esc_html__('Batch actions', 'olama-users') . '</strong> ';
             foreach (array('create' => __('Create users', 'olama-users'), 'update' => __('Update users', 'olama-users')) as $operation => $label) {
@@ -281,7 +281,7 @@ class Olama_Users_Admin {
             }
             echo '</div>';
         }
-        echo '</div><table class="widefat striped"><thead><tr><th>' . esc_html__('Status', 'olama-users') . '</th><th>' . esc_html__('Identifier', 'olama-users') . '</th><th>' . esc_html__('Username', 'olama-users') . '</th><th>' . esc_html__('Display name', 'olama-users') . '</th><th>' . esc_html__('Action', 'olama-users') . '</th></tr></thead><tbody>';
+        echo '</div><div class="olama-sync-table-wrap"><table class="widefat striped olama-sync-table"><thead><tr><th>' . esc_html__('Status', 'olama-users') . '</th><th>' . esc_html__('Identifier', 'olama-users') . '</th><th>' . esc_html__('Username', 'olama-users') . '</th><th>' . esc_html__('Display name', 'olama-users') . '</th><th>' . esc_html__('Action', 'olama-users') . '</th></tr></thead><tbody>';
         foreach ($result['events'] as $event) {
             echo '<tr><td>' . esc_html(ucfirst($event['status'])) . '</td><td><code>' . esc_html($event['identifier']) . '</code></td><td><code>' . esc_html(isset($event['username']) ? $event['username'] : '') . '</code></td><td><strong>' . esc_html(isset($event['display_name']) ? $event['display_name'] : '') . '</strong></td><td>';
             if ($is_preview && current_user_can('olama_users_sync_apply') && in_array($event['status'], array('create', 'update'), true)) {
@@ -293,7 +293,7 @@ class Olama_Users_Admin {
             }
             echo '</td></tr>';
         }
-        echo '</tbody></table></section>';
+        echo '</tbody></table></div></section>';
     }
 
     public function roles() {
