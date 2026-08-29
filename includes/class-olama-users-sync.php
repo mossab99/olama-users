@@ -236,7 +236,7 @@ class Olama_Users_Sync {
 
     private function process_family(array $record, $apply) {
         $id = isset($record['oracle_family_id']) ? trim((string) $record['oracle_family_id']) : '';
-        $family_name = $this->first_value($record, array('sponsor_full_name', 'father_name', 'mother_name'));
+        $family_name = $this->first_value($record, array('father_name', 'sponsor_full_name', 'mother_name'));
         $display_name = $this->family_display_name($id, $family_name, isset($record['family_uid']) ? $record['family_uid'] : '');
         $phone = $this->normalize_phone(isset($record['mother_mobile']) ? $record['mother_mobile'] : '');
         if (!preg_match('/^\d+$/', $id) || !$this->valid_jordan_mobile($phone)) {
@@ -445,7 +445,10 @@ class Olama_Users_Sync {
             foreach ($years as $student_year) {
                 $student_uid = isset($student_year['student_uid']) ? (string) $student_year['student_uid'] : '';
                 if ($student_uid) {
-                    $classes[$student_uid] = trim((string) (isset($student_year['class_name']) ? $student_year['class_name'] : ''));
+                    $classes[$student_uid] = array(
+                        'grade' => trim((string) (isset($student_year['class_name']) ? $student_year['class_name'] : '')),
+                        'section' => trim((string) (isset($student_year['section_name']) ? $student_year['section_name'] : '')),
+                    );
                 }
             }
             foreach ((array) $rows as $student) {
@@ -455,8 +458,12 @@ class Olama_Users_Sync {
                 if ('' === $student_name || ($classes && !isset($classes[$student_uid]))) {
                     continue;
                 }
-                $class_name = !empty($classes[$student_uid]) ? $this->short_class_name($classes[$student_uid]) : '';
-                $students[] = trim($student_name . ($class_name ? ' ' . $class_name : ''));
+                $student_first_name = preg_split('/\s+/u', $student_name, 2, PREG_SPLIT_NO_EMPTY);
+                $student_first_name = isset($student_first_name[0]) ? $student_first_name[0] : $student_name;
+                $grade = !empty($classes[$student_uid]['grade']) ? $this->short_class_name($classes[$student_uid]['grade']) : '';
+                $section = !empty($classes[$student_uid]['section']) ? $classes[$student_uid]['section'] : '';
+                $student_parts = array_filter(array($student_first_name, $grade, $section), 'strlen');
+                $students[] = implode(' - ', $student_parts);
             }
         }
 
