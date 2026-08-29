@@ -481,11 +481,8 @@ class Olama_Users_Sync {
 
     private function short_class_name($class_name) {
         $class_name = trim((string) $class_name);
-        if (preg_match('/^تاسع\s+[اأ]ساسي$/u', $class_name)) {
-            return 'تاسع ب';
-        }
         if (preg_match('/\s+[اأ]ساسي$/u', $class_name)) {
-            return trim((string) preg_replace('/\s+[اأ]ساسي$/u', ' أ', $class_name));
+            return trim((string) preg_replace('/\s+[اأ]ساسي$/u', '', $class_name));
         }
         return $class_name;
     }
