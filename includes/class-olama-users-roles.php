@@ -279,6 +279,10 @@ class Olama_Users_Roles {
             $role_seeds = isset($seeds[$role_key]) && is_array($seeds[$role_key]) ? $seeds[$role_key] : array();
             $role_grants = isset($grants[$role_key]) && is_array($grants[$role_key]) ? $grants[$role_key] : array();
             foreach ($capabilities as $capability) {
+                $default_grant_roles = Olama_Users_Registry::default_grant_roles($capability);
+                if ($default_grant_roles && !in_array($role_key, $default_grant_roles, true)) {
+                    continue;
+                }
                 if (in_array($capability, $role_seeds, true)) {
                     continue;
                 }

@@ -54,6 +54,12 @@ class Olama_Users_Registry {
         $definition['plugin'] = isset($definition['plugin']) ? sanitize_key($definition['plugin']) : '';
         $definition['items'] = isset($definition['items']) && is_array($definition['items']) ? $definition['items'] : array();
         $definition['default_grant'] = !empty($definition['default_grant']);
+        $definition['default_grant_roles'] = isset($definition['default_grant_roles']) && is_array($definition['default_grant_roles'])
+            ? array_values(array_unique(array_filter(array_map('sanitize_key', $definition['default_grant_roles']))))
+            : array();
+        $definition['default_grant_capabilities'] = isset($definition['default_grant_capabilities']) && is_array($definition['default_grant_capabilities'])
+            ? array_values(array_unique(array_filter(array_map('sanitize_key', $definition['default_grant_capabilities']))))
+            : array();
         self::$modules[$id] = $definition;
         return true;
     }
@@ -188,9 +194,29 @@ class Olama_Users_Registry {
         foreach (self::all() as $module) {
             if (!empty($module['default_grant'])) {
                 $caps[] = $module['capability'];
+                if (!empty($module['default_grant_capabilities'])) {
+                    $caps = array_merge($caps, $module['default_grant_capabilities']);
+                }
             }
         }
         return array_values(array_unique(array_filter(array_map('sanitize_key', $caps))));
+    }
+
+    public static function default_grant_roles($capability) {
+        $capability = sanitize_key($capability);
+        foreach (self::all() as $module) {
+            if (!$module['default_grant']) {
+                continue;
+            }
+            $module_capabilities = array($module['capability']);
+            if (!empty($module['default_grant_capabilities'])) {
+                $module_capabilities = array_merge($module_capabilities, $module['default_grant_capabilities']);
+            }
+            if (in_array($capability, $module_capabilities, true)) {
+                return $module['default_grant_roles'];
+            }
+        }
+        return array();
     }
 
     private static function collect_item_capabilities(array $item, array &$caps) {
