@@ -221,7 +221,17 @@ class Olama_Users_Admin {
             delete_transient('olama_users_sync_' . get_current_user_id());
         }
         global $wpdb;
-        $counts = $wpdb->get_results('SELECT identity_type, account_status, COUNT(*) AS total FROM `' . esc_sql(Olama_Users_DB::identities_table()) . '` GROUP BY identity_type, account_status', ARRAY_A);
+        // WordPress users are the source of truth for accounts that currently
+        // exist. An identity row can outlive its user when an account is
+        // deleted outside this plugin, so do not include orphaned mappings in
+        // the dashboard totals.
+        $counts = $wpdb->get_results(
+            'SELECT identities.identity_type, identities.account_status, COUNT(DISTINCT identities.wp_user_id) AS total
+            FROM `' . esc_sql(Olama_Users_DB::identities_table()) . '` AS identities
+            INNER JOIN `' . esc_sql($wpdb->users) . '` AS users ON users.ID = identities.wp_user_id
+            GROUP BY identities.identity_type, identities.account_status',
+            ARRAY_A
+        );
         echo '<div class="wrap olama-users-wrap"><div class="olama-users-hero"><div><span class="olama-eyebrow">' . esc_html__('Account centre', 'olama-users') . '</span><h1>' . esc_html__('OLAMA Users', 'olama-users') . '</h1><p>' . esc_html__('Create and maintain family and employee WordPress accounts from approved OLAMA sources.', 'olama-users') . '</p></div><span class="dashicons dashicons-groups"></span></div>';
         $default_roles_ready = Olama_Users_Roles::default_roles_ready();
         if (!$default_roles_ready) {
