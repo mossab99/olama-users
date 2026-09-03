@@ -25,9 +25,6 @@ final class Olama_Users_Plugin {
         add_action('init', array('Olama_Users_Roles', 'enforce_deleted_roles'), 9999);
         add_action('init', array('Olama_Users_Roles', 'enforce_approved_roles'), 9999);
         add_action('wp_loaded', array('Olama_Users_Roles', 'enforce_approved_roles'), 9999);
-        add_action('set_user_role', array('Olama_Users_Roles', 'block_external_set_role'), 9999, 3);
-        add_action('add_user_role', array('Olama_Users_Roles', 'block_external_add_role'), 9999, 2);
-        add_action('remove_user_role', array('Olama_Users_Roles', 'block_external_remove_role'), 9999, 2);
         add_filter('user_has_cap', array($this, 'enforce_service_access'), 9999, 4);
         add_filter('authenticate', array($this, 'authenticate_family'), 25, 3);
         add_filter('wp_authenticate_user', array($this, 'block_suspended_user'), 20, 2);
