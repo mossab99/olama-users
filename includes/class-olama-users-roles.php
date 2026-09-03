@@ -592,12 +592,22 @@ class Olama_Users_Roles {
         if (self::is_authorized_change()) {
             return;
         }
+        if (
+            !in_array('administrator', (array) $old_roles, true) &&
+            self::is_verified_wordpress_role_change($user_id, $role)
+        ) {
+            Olama_Users_DB::audit('wordpress_role_assignment', absint($user_id), 'local_system', sanitize_key($role), 'success');
+            return;
+        }
         self::restore_roles($user_id, (array) $old_roles);
         Olama_Users_DB::audit('external_role_assignment_blocked', absint($user_id), 'local_system', sanitize_key($role), 'blocked');
     }
 
     public static function block_external_add_role($user_id, $role) {
         if (self::is_authorized_change()) {
+            return;
+        }
+        if (self::is_verified_wordpress_role_change($user_id, $role)) {
             return;
         }
         self::run_authorized(function() use ($user_id, $role) {
@@ -613,6 +623,11 @@ class Olama_Users_Roles {
         if (self::is_authorized_change()) {
             return;
         }
+        // set_role() announces removals before its final set_user_role action.
+        // The submitted role is validated there, so only verify the request here.
+        if (self::is_verified_wordpress_role_change($user_id, '', false)) {
+            return;
+        }
         self::run_authorized(function() use ($user_id, $role) {
             $user = get_userdata(absint($user_id));
             if ($user && get_role(sanitize_key($role))) {
@@ -620,6 +635,68 @@ class Olama_Users_Roles {
             }
         });
         Olama_Users_DB::audit('external_role_removal_blocked', absint($user_id), 'local_system', sanitize_key($role), 'blocked');
+    }
+
+    /**
+     * Allow role changes submitted through WordPress' native Users screens.
+     *
+     * The request must carry the nonce used by WordPress core, the actor must
+     * be allowed to promote the target user, and the submitted role must be an
+     * approved non-Administrator OLAMA role. Programmatic role changes remain
+     * blocked unless they use run_authorized().
+     */
+    private static function is_verified_wordpress_role_change($user_id, $role = '', $match_submitted_role = true) {
+        if (
+            !is_admin() ||
+            !is_user_logged_in() ||
+            'POST' !== strtoupper(isset($_SERVER['REQUEST_METHOD']) ? (string) $_SERVER['REQUEST_METHOD'] : '') ||
+            !current_user_can('promote_users')
+        ) {
+            return false;
+        }
+
+        $user_id = absint($user_id);
+        if (!$user_id || !current_user_can('promote_user', $user_id)) {
+            return false;
+        }
+
+        global $pagenow;
+        $page = isset($pagenow) ? basename((string) $pagenow) : '';
+        $action = isset($_REQUEST['action']) ? sanitize_key(wp_unslash($_REQUEST['action'])) : '';
+        if (('-1' === $action || '' === $action) && isset($_REQUEST['action2'])) {
+            $action = sanitize_key(wp_unslash($_REQUEST['action2']));
+        }
+
+        $verified = false;
+        if ('user-new.php' === $page && 'createuser' === $action && isset($_REQUEST['_wpnonce_create-user'])) {
+            $nonce = sanitize_text_field(wp_unslash($_REQUEST['_wpnonce_create-user']));
+            $verified = (bool) wp_verify_nonce($nonce, 'create-user');
+        } elseif ('user-edit.php' === $page && 'update' === $action && isset($_REQUEST['_wpnonce'])) {
+            $nonce = sanitize_text_field(wp_unslash($_REQUEST['_wpnonce']));
+            $verified = (bool) wp_verify_nonce($nonce, 'update-user_' . $user_id);
+        } elseif ('users.php' === $page && 'promote' === $action && isset($_REQUEST['_wpnonce'])) {
+            $nonce = sanitize_text_field(wp_unslash($_REQUEST['_wpnonce']));
+            $verified = (bool) wp_verify_nonce($nonce, 'bulk-users');
+        }
+
+        if (!$verified) {
+            return false;
+        }
+
+        $submitted_role = 'users.php' === $page
+            ? (isset($_REQUEST['new_role']) ? sanitize_key(wp_unslash($_REQUEST['new_role'])) : '')
+            : (isset($_REQUEST['role']) ? sanitize_key(wp_unslash($_REQUEST['role'])) : '');
+        if (
+            !$submitted_role ||
+            'none' === $submitted_role ||
+            'administrator' === $submitted_role ||
+            !get_role($submitted_role) ||
+            !in_array($submitted_role, self::approved_keys(), true)
+        ) {
+            return false;
+        }
+
+        return !$match_submitted_role || $submitted_role === sanitize_key($role);
     }
 
     private static function restore_roles($user_id, array $roles) {
