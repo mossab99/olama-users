@@ -594,7 +594,7 @@ class Olama_Users_Roles {
         }
         if (
             !in_array('administrator', (array) $old_roles, true) &&
-            self::is_verified_wordpress_role_change($user_id, $role)
+            self::is_verified_wordpress_role_change($user_id, $role, 'set')
         ) {
             Olama_Users_DB::audit('wordpress_role_assignment', absint($user_id), 'local_system', sanitize_key($role), 'success');
             return;
@@ -607,7 +607,13 @@ class Olama_Users_Roles {
         if (self::is_authorized_change()) {
             return;
         }
-        if (self::is_verified_wordpress_role_change($user_id, $role)) {
+        $user = get_userdata(absint($user_id));
+        if (
+            $user &&
+            !in_array('administrator', (array) $user->roles, true) &&
+            self::is_verified_wordpress_role_change($user_id, $role, 'add')
+        ) {
+            Olama_Users_DB::audit('wordpress_role_added', absint($user_id), 'local_system', sanitize_key($role), 'success');
             return;
         }
         self::run_authorized(function() use ($user_id, $role) {
@@ -623,9 +629,8 @@ class Olama_Users_Roles {
         if (self::is_authorized_change()) {
             return;
         }
-        // set_role() announces removals before its final set_user_role action.
-        // The submitted role is validated there, so only verify the request here.
-        if (self::is_verified_wordpress_role_change($user_id, '', false)) {
+        if (self::is_verified_wordpress_role_change($user_id, $role, 'remove')) {
+            Olama_Users_DB::audit('wordpress_role_removed', absint($user_id), 'local_system', sanitize_key($role), 'success');
             return;
         }
         self::run_authorized(function() use ($user_id, $role) {
@@ -642,10 +647,11 @@ class Olama_Users_Roles {
      *
      * The request must carry the nonce used by WordPress core, the actor must
      * be allowed to promote the target user, and the submitted role must be an
-     * approved non-Administrator OLAMA role. Programmatic role changes remain
-     * blocked unless they use run_authorized().
+     * approved non-Administrator OLAMA role. The Members plugin's nonce and
+     * multi-role selection are also supported. Programmatic role changes
+     * remain blocked unless they use run_authorized().
      */
-    private static function is_verified_wordpress_role_change($user_id, $role = '', $match_submitted_role = true) {
+    private static function is_verified_wordpress_role_change($user_id, $role, $operation) {
         if (
             !is_admin() ||
             !is_user_logged_in() ||
@@ -683,6 +689,43 @@ class Olama_Users_Roles {
             return false;
         }
 
+        $role = sanitize_key($role);
+        $operation = sanitize_key($operation);
+        if (
+            !$role ||
+            !in_array($operation, array('set', 'add', 'remove'), true) ||
+            'administrator' === $role ||
+            !get_role($role) ||
+            !in_array($role, self::approved_keys(), true)
+        ) {
+            return false;
+        }
+
+        // Members replaces WordPress' single-role selector with checkboxes and
+        // applies its changes later via add_role() and remove_role(). Respect
+        // that desired role set only when its own nonce is also valid.
+        if (isset($_POST['members_new_user_roles_nonce'])) {
+            $members_nonce = sanitize_text_field(wp_unslash($_POST['members_new_user_roles_nonce']));
+            if (!wp_verify_nonce($members_nonce, 'new_user_roles')) {
+                return false;
+            }
+            $submitted_roles = isset($_POST['members_user_roles']) && is_array($_POST['members_user_roles'])
+                ? array_values(array_unique(array_filter(array_map('sanitize_key', wp_unslash($_POST['members_user_roles'])))))
+                : array();
+            foreach ($submitted_roles as $submitted_role) {
+                if (
+                    'administrator' === $submitted_role ||
+                    !get_role($submitted_role) ||
+                    !in_array($submitted_role, self::approved_keys(), true)
+                ) {
+                    return false;
+                }
+            }
+            return 'remove' === $operation
+                ? !in_array($role, $submitted_roles, true)
+                : in_array($role, $submitted_roles, true);
+        }
+
         $submitted_role = 'users.php' === $page
             ? (isset($_REQUEST['new_role']) ? sanitize_key(wp_unslash($_REQUEST['new_role'])) : '')
             : (isset($_REQUEST['role']) ? sanitize_key(wp_unslash($_REQUEST['role'])) : '');
@@ -696,7 +739,9 @@ class Olama_Users_Roles {
             return false;
         }
 
-        return !$match_submitted_role || $submitted_role === sanitize_key($role);
+        // WordPress core's single-role workflow removes the old role before
+        // adding and finally setting the submitted one.
+        return 'remove' === $operation || $submitted_role === $role;
     }
 
     private static function restore_roles($user_id, array $roles) {
