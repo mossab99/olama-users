@@ -26,6 +26,7 @@ final class Olama_Users_Plugin {
         add_action('init', array('Olama_Users_Roles', 'enforce_approved_roles'), 9999);
         add_action('wp_loaded', array('Olama_Users_Roles', 'enforce_approved_roles'), 9999);
         add_filter('user_has_cap', array($this, 'enforce_service_access'), 9999, 4);
+        add_filter('authenticate', array($this, 'authenticate_temp_family'), 24, 3);
         add_filter('authenticate', array($this, 'authenticate_family'), 25, 3);
         add_filter('wp_authenticate_user', array($this, 'block_suspended_user'), 20, 2);
         add_action('admin_init', array($this, 'restrict_temp_family_admin'));
@@ -155,6 +156,50 @@ final class Olama_Users_Plugin {
             return new WP_Error('invalid_username', __('Invalid username or password.', 'olama-users'));
         }
         Olama_Users_DB::audit('login_succeeded', $user->ID, 'family', $username);
+        return $user;
+    }
+
+    public function authenticate_temp_family($result, $username, $password) {
+        if ($result instanceof WP_User) {
+            return $result;
+        }
+        $username = trim((string) $username);
+        $password = (string) $password;
+        if ('' === $username || '' === $password) {
+            return $result;
+        }
+
+        $login = $username;
+        if (0 !== strpos($login, 'tf_')) {
+            if (!preg_match('/^\d+$/', $login)) {
+                return $result;
+            }
+            // A real Core family number always keeps priority over the
+            // convenient prefix-free alias for a temporary account.
+            if (Olama_Users_DB::get_identity('family', $login)) {
+                return $result;
+            }
+            $login = 'tf_' . $login;
+        }
+
+        $user = get_user_by('login', $login);
+        if (!$user instanceof WP_User) {
+            return $result;
+        }
+        $identity = Olama_Users_DB::get_identity_by_user($user->ID);
+        if (!$identity || 'temp_family' !== (string) $identity['identity_type']) {
+            return $result;
+        }
+        if (
+            'active' !== (string) $identity['account_status'] ||
+            Olama_Users_Temp_Families::is_expired($user->ID) ||
+            !wp_check_password($password, $user->user_pass, $user->ID)
+        ) {
+            Olama_Users_DB::audit('login_failed', $user->ID, 'temp_family', $identity['oracle_identifier'], 'failed');
+            return new WP_Error('invalid_username', __('Invalid username or password.', 'olama-users'));
+        }
+
+        Olama_Users_DB::audit('login_succeeded', $user->ID, 'temp_family', $identity['oracle_identifier']);
         return $user;
     }
 
