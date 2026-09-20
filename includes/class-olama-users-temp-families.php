@@ -9,7 +9,7 @@ class Olama_Users_Temp_Families {
     const IDENTITY_TYPE = 'temp_family';
     const EXPIRY_META = 'olama_temp_family_expires_on';
     const NOTES_META = 'olama_temp_family_notes';
-    const CAPABILITIES_SEEDED_OPTION = 'olama_users_temp_family_caps_seeded_v2';
+    const CAPABILITIES_SEEDED_OPTION = 'olama_users_temp_family_caps_seeded_v3';
 
     public static function seed_portal_capabilities() {
         if ('1' === (string) get_option(self::CAPABILITIES_SEEDED_OPTION, '')) {
@@ -24,6 +24,7 @@ class Olama_Users_Temp_Families {
             'olama_student_gateway_schedule_view',
             'olama_student_gateway_teachers_view',
             'olama_student_gateway_video_library_view',
+            'olama_student_gateway_exams_view',
         );
         $result = Olama_Users_Roles::save_plugin_capabilities(self::ROLE, 'olama_student_gateway', $caps);
         if (!is_wp_error($result)) {
