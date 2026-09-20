@@ -6,20 +6,13 @@
 .olama-temp-family-form small { display: block; margin-top: 4px; color: #646970; }
 .olama-temp-grid { display: grid; grid-template-columns: repeat(2, minmax(240px, 1fr)); gap: 16px; }
 .olama-temp-grid .is-wide { grid-column: 1 / -1; }
-.olama-temp-student-picker { margin: 22px 0; padding: 18px; border: 1px solid #dcdcde; border-radius: 10px; background: #f8fafc; }
-.olama-temp-student-picker h3 { margin-top: 0; }
-.olama-temp-search { display: flex; gap: 8px; }
-.olama-temp-search input { max-width: 520px; }
-.olama-temp-search-results { display: grid; gap: 6px; max-width: 720px; margin: 10px 0; }
-.olama-temp-search-result { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid #dcdcde; border-radius: 7px; background: #fff; text-align: start; cursor: pointer; }
-.olama-temp-search-result:hover { border-color: #4f46e5; background: #eef2ff; }
-.olama-temp-search-result small { color: #646970; }
-.olama-temp-selected { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-.olama-temp-student { display: grid; grid-template-columns: 1fr auto; position: relative; min-width: 240px; padding: 9px 34px 9px 12px; border: 1px solid #c7d2fe; border-radius: 8px; background: #eef2ff; }
-.olama-temp-student small { grid-column: 1; color: #475569; }
-.olama-temp-student [data-remove-student] { position: absolute; inset-inline-end: 10px; top: 10px; border: 0; background: transparent; cursor: pointer; }
+.olama-temp-members { margin: 22px 0; padding: 18px; border: 1px solid #dcdcde; border-radius: 10px; background: #f8fafc; }
+.olama-temp-members h3 { margin: 0; }
+.olama-temp-member { display: grid; grid-template-columns: minmax(220px, 1.5fr) minmax(180px, 1fr) minmax(180px, 1fr) auto; align-items: end; gap: 12px; margin-top: 12px; padding: 14px; border: 1px solid #dcdcde; border-radius: 9px; background: #fff; }
+.olama-temp-member select { width: 100%; }
+.olama-temp-member .button-link-delete { min-height: 30px; }
 .olama-temp-list { margin-top: 20px; }
-.olama-temp-student-summary { display: block; margin-bottom: 5px; }
+.olama-temp-member-summary { display: block; margin-bottom: 5px; }
 .olama-temp-status { display: inline-block; padding: 3px 9px; border-radius: 999px; font-weight: 600; }
 .olama-temp-status.is-active { background: #dcfce7; color: #166534; }
 .olama-temp-status.is-inactive { background: #fee2e2; color: #991b1b; }
@@ -30,7 +23,6 @@
 @media (max-width: 782px) {
     .olama-temp-grid { grid-template-columns: 1fr; }
     .olama-temp-grid .is-wide { grid-column: auto; }
-    .olama-temp-search,
     .olama-temp-password-form { align-items: stretch; flex-direction: column; }
-    .olama-temp-search-result { flex-direction: column; }
+    .olama-temp-member { grid-template-columns: 1fr; align-items: stretch; }
 }

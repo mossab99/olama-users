@@ -17,7 +17,6 @@ class Olama_Users_Admin {
         add_action('admin_post_olama_users_assign_role', array($this, 'handle_assign_role'));
         add_action('admin_post_olama_users_save_settings', array($this, 'handle_settings'));
         add_action('admin_post_olama_users_temp_family', array($this, 'handle_temp_family'));
-        add_action('wp_ajax_olama_users_search_students', array($this, 'ajax_search_students'));
         add_action('admin_enqueue_scripts', array($this, 'assets'));
     }
 
@@ -39,12 +38,6 @@ class Olama_Users_Admin {
         wp_enqueue_style('olama-users-admin', OLAMA_USERS_URL . 'assets/admin.css', array(), $asset_version);
         wp_enqueue_style('olama-users-temp-families', OLAMA_USERS_URL . 'assets/temp-families.css', array('olama-users-admin'), OLAMA_USERS_VERSION . '.' . (string) @filemtime(OLAMA_USERS_PATH . 'assets/temp-families.css'));
         wp_enqueue_script('olama-users-admin', OLAMA_USERS_URL . 'assets/admin.js', array(), $asset_version, true);
-        wp_localize_script('olama-users-admin', 'olamaUsersAdmin', array(
-            'studentSearchNonce' => wp_create_nonce('olama_users_student_search'),
-            'searching' => __('Searching…', 'olama-users'),
-            'noStudents' => __('No matching students found.', 'olama-users'),
-            'remove' => __('Remove', 'olama-users'),
-        ));
     }
 
     public function handle_temp_family() {
@@ -78,26 +71,6 @@ class Olama_Users_Admin {
         }
         wp_safe_redirect(add_query_arg($args, admin_url('admin.php')));
         exit;
-    }
-
-    public function ajax_search_students() {
-        $this->authorize('olama_users_temp_families_manage');
-        check_ajax_referer('olama_users_student_search', 'nonce');
-        $term = isset($_GET['term']) ? sanitize_text_field(wp_unslash($_GET['term'])) : '';
-        if (strlen($term) < 2 || !function_exists('olama_core')) {
-            wp_send_json_success(array());
-        }
-        $rows = olama_core()->students()->search($term, array('limit' => 20));
-        $results = array();
-        foreach ((array) $rows as $row) {
-            $results[] = array(
-                'uid' => (string) $row['student_uid'],
-                'name' => (string) $row['student_name'],
-                'family_id' => isset($row['oracle_family_id']) ? (string) $row['oracle_family_id'] : '',
-                'student_id' => isset($row['oracle_student_id']) ? (string) $row['oracle_student_id'] : '',
-            );
-        }
-        wp_send_json_success($results);
     }
 
     public function handle_sync() {
@@ -549,7 +522,7 @@ class Olama_Users_Admin {
             delete_transient($notice_key);
         }
 
-        echo '<div class="wrap olama-users-wrap"><div class="olama-panel-heading"><div><span class="olama-eyebrow">' . esc_html__('Local access', 'olama-users') . '</span><h1>' . esc_html__('Temp Families', 'olama-users') . '</h1><p>' . esc_html__('Create local, temporary access to explicitly assigned students. These accounts are never synchronized with OLAMA Core.', 'olama-users') . '</p></div>';
+        echo '<div class="wrap olama-users-wrap"><div class="olama-panel-heading"><div><span class="olama-eyebrow">' . esc_html__('Local access', 'olama-users') . '</span><h1>' . esc_html__('Temp Families', 'olama-users') . '</h1><p>' . esc_html__('Create local family members and choose their grades and sections. No existing Core student is assigned.', 'olama-users') . '</p></div>';
         if ($editing) {
             echo '<a class="button" href="' . esc_url(add_query_arg('page', 'olama-users-temp-families', admin_url('admin.php'))) . '">' . esc_html__('Create another account', 'olama-users') . '</a>';
         }
@@ -559,7 +532,7 @@ class Olama_Users_Admin {
         }
 
         $this->render_temp_family_form($editing);
-        echo '<section class="olama-users-panel olama-temp-list"><h2>' . esc_html__('Temporary accounts', 'olama-users') . '</h2><div class="olama-role-table-wrap"><table class="widefat striped"><thead><tr><th>' . esc_html__('Account', 'olama-users') . '</th><th>' . esc_html__('Assigned students', 'olama-users') . '</th><th>' . esc_html__('Expiry', 'olama-users') . '</th><th>' . esc_html__('Status', 'olama-users') . '</th><th>' . esc_html__('Actions', 'olama-users') . '</th></tr></thead><tbody>';
+        echo '<section class="olama-users-panel olama-temp-list"><h2>' . esc_html__('Temporary accounts', 'olama-users') . '</h2><div class="olama-role-table-wrap"><table class="widefat striped"><thead><tr><th>' . esc_html__('Account', 'olama-users') . '</th><th>' . esc_html__('Family members', 'olama-users') . '</th><th>' . esc_html__('Expiry', 'olama-users') . '</th><th>' . esc_html__('Status', 'olama-users') . '</th><th>' . esc_html__('Actions', 'olama-users') . '</th></tr></thead><tbody>';
         if (!$accounts) {
             echo '<tr><td colspan="5">' . esc_html__('No Temp Family accounts have been created.', 'olama-users') . '</td></tr>';
         }
@@ -572,8 +545,8 @@ class Olama_Users_Admin {
                 echo '<br><small>' . esc_html($user->user_email) . '</small>';
             }
             echo '</td><td>';
-            foreach ($account['students'] as $student) {
-                echo '<span class="olama-temp-student-summary"><strong>' . esc_html($student['student_name']) . '</strong> <code>' . esc_html($student['student_uid']) . '</code></span>';
+            foreach ($account['members'] as $member) {
+                echo '<span class="olama-temp-member-summary"><strong>' . esc_html($member['student_name']) . '</strong> <small>' . esc_html($member['academic']['class_name'] . ' · ' . $member['academic']['section_name']) . '</small></span>';
             }
             echo '</td><td>' . esc_html($account['expires_on'] ?: __('No expiry', 'olama-users')) . '</td><td><span class="olama-temp-status ' . esc_attr($active ? 'is-active' : 'is-inactive') . '">' . esc_html($expired ? __('Expired', 'olama-users') : ('active' === $account['identity']['account_status'] ? __('Active', 'olama-users') : __('Deactivated', 'olama-users'))) . '</span></td><td><div class="olama-temp-actions"><a class="button button-small" href="' . esc_url(add_query_arg(array('page' => 'olama-users-temp-families', 'edit' => $user->ID), admin_url('admin.php'))) . '">' . esc_html__('Edit', 'olama-users') . '</a>';
             $next_operation = 'active' === $account['identity']['account_status'] ? 'deactivate' : 'activate';
@@ -587,7 +560,9 @@ class Olama_Users_Admin {
     private function render_temp_family_form($account) {
         $editing = is_array($account);
         $user = $editing ? $account['user'] : null;
-        $students = $editing ? $account['students'] : array();
+        $members = $editing ? $account['members'] : array(array());
+        $grades = class_exists('Olama_School_Grade') ? (array) Olama_School_Grade::get_grades() : array();
+        $sections = class_exists('Olama_School_Section') ? (array) Olama_School_Section::get_sections() : array();
         echo '<section class="olama-users-panel olama-temp-editor"><h2>' . esc_html($editing ? __('Edit Temp Family', 'olama-users') : __('Create Temp Family', 'olama-users')) . '</h2>';
         echo '<form class="olama-temp-family-form" method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="olama_users_temp_family"><input type="hidden" name="operation" value="' . esc_attr($editing ? 'update' : 'create') . '">';
         if ($editing) {
@@ -602,11 +577,13 @@ class Olama_Users_Admin {
             echo '<label><span>' . esc_html__('Initial password', 'olama-users') . '</span><input type="password" name="password" required minlength="12" autocomplete="new-password"><small>' . esc_html__('At least 12 characters. Copy it before creating the account; it is never displayed or stored as plain text.', 'olama-users') . '</small></label>';
         }
         echo '<label class="is-wide"><span>' . esc_html__('Internal notes (optional)', 'olama-users') . '</span><textarea name="notes" rows="3">' . esc_textarea($editing ? $account['notes'] : '') . '</textarea></label></div>';
-        echo '<div class="olama-temp-student-picker" data-temp-student-picker><h3>' . esc_html__('Assigned students', 'olama-users') . '</h3><p>' . esc_html__('Only students selected here will be accessible from this account.', 'olama-users') . '</p><div class="olama-temp-search"><input type="search" data-student-search placeholder="' . esc_attr__('Search by student name, ID, or family number', 'olama-users') . '"><button type="button" class="button" data-student-search-button>' . esc_html__('Search', 'olama-users') . '</button></div><div class="olama-temp-search-results" data-student-search-results></div><div class="olama-temp-selected" data-student-selected>';
-        foreach ($students as $student) {
-            $this->render_temp_student_chip($student);
+        echo '<div class="olama-temp-members" data-temp-members><div class="olama-panel-heading"><div><h3>' . esc_html__('Family members', 'olama-users') . '</h3><p>' . esc_html__('Define each local member and select the grade and section whose portal content they may view.', 'olama-users') . '</p></div><button type="button" class="button" data-add-member>' . esc_html__('Add member', 'olama-users') . '</button></div><div data-member-list>';
+        foreach ($members as $index => $member) {
+            $this->render_temp_member_row($index, $member, $grades, $sections);
         }
-        echo '</div></div><p><button class="button button-primary">' . esc_html($editing ? __('Save changes', 'olama-users') : __('Create Temp Family', 'olama-users')) . '</button></p></form>';
+        echo '</div><template data-member-template>';
+        $this->render_temp_member_row('__INDEX__', array(), $grades, $sections);
+        echo '</template></div><p><button class="button button-primary">' . esc_html($editing ? __('Save changes', 'olama-users') : __('Create Temp Family', 'olama-users')) . '</button></p></form>';
         if ($editing) {
             echo '<hr><form class="olama-temp-password-form" method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="olama_users_temp_family"><input type="hidden" name="operation" value="reset_password"><input type="hidden" name="user_id" value="' . esc_attr($user->ID) . '">';
             wp_nonce_field('olama_users_temp_family');
@@ -615,8 +592,24 @@ class Olama_Users_Admin {
         echo '</section>';
     }
 
-    private function render_temp_student_chip(array $student) {
-        echo '<span class="olama-temp-student" data-student-uid="' . esc_attr($student['student_uid']) . '"><input type="hidden" name="student_uids[]" value="' . esc_attr($student['student_uid']) . '"><strong>' . esc_html($student['student_name']) . '</strong><small>' . esc_html($student['student_uid']) . '</small><button type="button" class="button-link-delete" data-remove-student aria-label="' . esc_attr__('Remove student', 'olama-users') . '">&times;</button></span>';
+    private function render_temp_member_row($index, array $member, array $grades, array $sections) {
+        $academic = isset($member['academic']) && is_array($member['academic']) ? $member['academic'] : array();
+        $uid = isset($member['student_uid']) ? $member['student_uid'] : '';
+        $name = isset($member['student_name']) ? $member['student_name'] : '';
+        $grade_id = isset($academic['school_grade_id']) ? absint($academic['school_grade_id']) : 0;
+        $section_id = isset($academic['school_section_id']) ? absint($academic['school_section_id']) : 0;
+        $prefix = 'members[' . $index . ']';
+        echo '<div class="olama-temp-member" data-member-row><input type="hidden" name="' . esc_attr($prefix . '[uid]') . '" value="' . esc_attr($uid) . '">';
+        echo '<label><span>' . esc_html__('Member name', 'olama-users') . '</span><input type="text" name="' . esc_attr($prefix . '[name]') . '" value="' . esc_attr($name) . '" required maxlength="190"></label>';
+        echo '<label><span>' . esc_html__('Grade', 'olama-users') . '</span><select name="' . esc_attr($prefix . '[grade_id]') . '" data-member-grade required><option value="">' . esc_html__('Select grade', 'olama-users') . '</option>';
+        foreach ($grades as $grade) {
+            echo '<option value="' . esc_attr($grade->id) . '" ' . selected($grade_id, absint($grade->id), false) . '>' . esc_html($grade->grade_name) . '</option>';
+        }
+        echo '</select></label><label><span>' . esc_html__('Section', 'olama-users') . '</span><select name="' . esc_attr($prefix . '[section_id]') . '" data-member-section required><option value="">' . esc_html__('Select section', 'olama-users') . '</option>';
+        foreach ($sections as $section) {
+            echo '<option value="' . esc_attr($section->id) . '" data-grade-id="' . esc_attr($section->grade_id) . '" ' . selected($section_id, absint($section->id), false) . '>' . esc_html($section->section_name) . '</option>';
+        }
+        echo '</select></label><button type="button" class="button button-link-delete" data-remove-member>' . esc_html__('Remove', 'olama-users') . '</button></div>';
     }
 
     public function matrix() {

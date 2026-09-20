@@ -44,82 +44,59 @@
         updateSelectAll();
     }
 
-    function initializeStudentPicker(picker) {
-        var input = picker.querySelector('[data-student-search]');
-        var button = picker.querySelector('[data-student-search-button]');
-        var results = picker.querySelector('[data-student-search-results]');
-        var selected = picker.querySelector('[data-student-selected]');
-        if (!input || !button || !results || !selected || typeof olamaUsersAdmin === 'undefined') {
+    function initializeMemberEditor(editor) {
+        var list = editor.querySelector('[data-member-list]');
+        var template = editor.querySelector('[data-member-template]');
+        var add = editor.querySelector('[data-add-member]');
+        if (!list || !template || !add) {
             return;
         }
 
-        function escapeHtml(value) {
-            var element = document.createElement('div');
-            element.textContent = value == null ? '' : String(value);
-            return element.innerHTML;
-        }
-
-        function addStudent(student) {
-            var exists = Array.prototype.some.call(selected.querySelectorAll('[data-student-uid]'), function (item) {
-                return item.getAttribute('data-student-uid') === student.uid;
+        function filterSections(row, keepSelection) {
+            var grade = row.querySelector('[data-member-grade]');
+            var section = row.querySelector('[data-member-section]');
+            if (!grade || !section) {
+                return;
+            }
+            var selectedSection = keepSelection ? section.value : '';
+            Array.prototype.forEach.call(section.options, function (option) {
+                var optionGrade = option.getAttribute('data-grade-id');
+                option.hidden = !!optionGrade && optionGrade !== grade.value;
+                option.disabled = option.hidden;
             });
-            if (exists) {
-                return;
+            if (!selectedSection || !section.querySelector('option[value="' + selectedSection + '"]:not([disabled])')) {
+                section.value = '';
             }
-            var chip = document.createElement('span');
-            chip.className = 'olama-temp-student';
-            chip.setAttribute('data-student-uid', student.uid);
-            chip.innerHTML = '<input type="hidden" name="student_uids[]" value="' + escapeHtml(student.uid) + '">' +
-                '<strong>' + escapeHtml(student.name) + '</strong><small>' + escapeHtml(student.uid) + '</small>' +
-                '<button type="button" class="button-link-delete" data-remove-student aria-label="' + escapeHtml(olamaUsersAdmin.remove) + '">&times;</button>';
-            selected.appendChild(chip);
         }
 
-        function search() {
-            var term = input.value.trim();
-            if (term.length < 2) {
-                return;
-            }
-            results.textContent = olamaUsersAdmin.searching;
-            fetch(ajaxurl + '?action=olama_users_search_students&nonce=' + encodeURIComponent(olamaUsersAdmin.studentSearchNonce) + '&term=' + encodeURIComponent(term), { credentials: 'same-origin' })
-                .then(function (response) { return response.json(); })
-                .then(function (payload) {
-                    results.innerHTML = '';
-                    var rows = payload && payload.success ? payload.data : [];
-                    if (!rows.length) {
-                        results.textContent = olamaUsersAdmin.noStudents;
-                        return;
-                    }
-                    rows.forEach(function (student) {
-                        var row = document.createElement('button');
-                        row.type = 'button';
-                        row.className = 'olama-temp-search-result';
-                        row.innerHTML = '<strong>' + escapeHtml(student.name) + '</strong><small>' + escapeHtml(student.uid) + ' · ' + escapeHtml(student.family_id) + '/' + escapeHtml(student.student_id) + '</small>';
-                        row.addEventListener('click', function () { addStudent(student); });
-                        results.appendChild(row);
-                    });
-                })
-                .catch(function () { results.textContent = olamaUsersAdmin.noStudents; });
-        }
-
-        button.addEventListener('click', search);
-        input.addEventListener('keydown', function (event) {
-            if (event.key === 'Enter') {
-                event.preventDefault();
-                search();
+        Array.prototype.forEach.call(list.querySelectorAll('[data-member-row]'), function (row) {
+            filterSections(row, true);
+        });
+        add.addEventListener('click', function () {
+            var holder = document.createElement('div');
+            holder.innerHTML = template.innerHTML.replace(/__INDEX__/g, 'new_' + Date.now());
+            var row = holder.firstElementChild;
+            if (row) {
+                list.appendChild(row);
+                filterSections(row, false);
             }
         });
-        selected.addEventListener('click', function (event) {
-            var remove = event.target.closest('[data-remove-student]');
+        editor.addEventListener('change', function (event) {
+            if (event.target.matches('[data-member-grade]')) {
+                filterSections(event.target.closest('[data-member-row]'), false);
+            }
+        });
+        editor.addEventListener('click', function (event) {
+            var remove = event.target.closest('[data-remove-member]');
             if (remove) {
-                remove.closest('[data-student-uid]').remove();
+                remove.closest('[data-member-row]').remove();
             }
         });
     }
 
     document.addEventListener('DOMContentLoaded', function () {
         document.querySelectorAll('.olama-capability-form').forEach(initializeSelectAll);
-        document.querySelectorAll('[data-temp-student-picker]').forEach(initializeStudentPicker);
+        document.querySelectorAll('[data-temp-members]').forEach(initializeMemberEditor);
 
         document.querySelectorAll('[data-olama-modal-open]').forEach(function (trigger) {
             trigger.addEventListener('click', function () {

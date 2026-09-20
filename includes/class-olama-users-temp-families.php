@@ -9,7 +9,7 @@ class Olama_Users_Temp_Families {
     const IDENTITY_TYPE = 'temp_family';
     const EXPIRY_META = 'olama_temp_family_expires_on';
     const NOTES_META = 'olama_temp_family_notes';
-    const CAPABILITIES_SEEDED_OPTION = 'olama_users_temp_family_caps_seeded';
+    const CAPABILITIES_SEEDED_OPTION = 'olama_users_temp_family_caps_seeded_v2';
 
     public static function seed_portal_capabilities() {
         if ('1' === (string) get_option(self::CAPABILITIES_SEEDED_OPTION, '')) {
@@ -24,11 +24,6 @@ class Olama_Users_Temp_Families {
             'olama_student_gateway_schedule_view',
             'olama_student_gateway_teachers_view',
             'olama_student_gateway_video_library_view',
-            'olama_student_gateway_exams_view',
-            'olama_student_gateway_evaluations_view',
-            'olama_student_gateway_attendance_view',
-            'olama_student_gateway_stores_view',
-            'olama_student_gateway_messages_view',
         );
         $result = Olama_Users_Roles::save_plugin_capabilities(self::ROLE, 'olama_student_gateway', $caps);
         if (!is_wp_error($result)) {
@@ -41,7 +36,7 @@ class Olama_Users_Temp_Families {
         $login = sanitize_user(isset($input['user_login']) ? $input['user_login'] : '', true);
         $email = sanitize_email(isset($input['user_email']) ? $input['user_email'] : '');
         $password = isset($input['password']) ? (string) $input['password'] : '';
-        $student_uids = self::sanitize_student_uids(isset($input['student_uids']) ? $input['student_uids'] : array());
+        $member_input = isset($input['members']) ? $input['members'] : array();
         if (!$display_name || !$login) {
             return new WP_Error('temp_family_required_fields', __('Enter a display name and username.', 'olama-users'));
         }
@@ -60,9 +55,9 @@ class Olama_Users_Temp_Families {
         if (strlen($password) < 12) {
             return new WP_Error('temp_family_weak_password', __('Use a password with at least 12 characters.', 'olama-users'));
         }
-        $validated = self::validate_students($student_uids);
-        if (is_wp_error($validated)) {
-            return $validated;
+        $members = self::validate_members($member_input);
+        if (is_wp_error($members)) {
+            return $members;
         }
         $user_id = Olama_Users_Roles::run_authorized(function() use ($login, $password, $email, $display_name) {
             return wp_insert_user(array(
@@ -83,9 +78,9 @@ class Olama_Users_Temp_Families {
             wp_delete_user($user_id);
             return $saved;
         }
-        self::save_profile($user_id, $input, $validated);
+        self::save_profile($user_id, $input, $members);
         Olama_Users_DB::audit('temp_family_created', $user_id, self::IDENTITY_TYPE, $identity_key, 'success', array(
-            'students' => $validated,
+            'member_count' => count($members),
             'expires_on' => get_user_meta($user_id, self::EXPIRY_META, true),
         ));
         return $user_id;
@@ -105,29 +100,28 @@ class Olama_Users_Temp_Families {
         if ($email_owner && absint($email_owner) !== absint($user_id)) {
             return new WP_Error('temp_family_email_exists', __('That email address is already in use.', 'olama-users'));
         }
-        $student_uids = self::sanitize_student_uids(isset($input['student_uids']) ? $input['student_uids'] : array());
-        $validated = self::validate_students($student_uids);
-        if (is_wp_error($validated)) {
-            return $validated;
+        $members = self::validate_members(isset($input['members']) ? $input['members'] : array());
+        if (is_wp_error($members)) {
+            return $members;
         }
         $updated = wp_update_user(array('ID' => absint($user_id), 'display_name' => $display_name, 'user_email' => $email));
         if (is_wp_error($updated)) {
             return $updated;
         }
-        self::save_profile($user_id, $input, $validated);
+        self::save_profile($user_id, $input, $members);
         Olama_Users_DB::audit('temp_family_updated', $user_id, self::IDENTITY_TYPE, $account['identity']['oracle_identifier'], 'success', array(
-            'students' => $validated,
+            'member_count' => count($members),
             'expires_on' => get_user_meta($user_id, self::EXPIRY_META, true),
         ));
         return $user_id;
     }
 
-    private static function save_profile($user_id, array $input, array $student_uids) {
+    private static function save_profile($user_id, array $input, array $members) {
         $expires_on = self::sanitize_expiry(isset($input['expires_on']) ? $input['expires_on'] : '');
         $notes = sanitize_textarea_field(isset($input['notes']) ? $input['notes'] : '');
         update_user_meta($user_id, self::EXPIRY_META, $expires_on);
         update_user_meta($user_id, self::NOTES_META, $notes);
-        self::replace_students($user_id, $student_uids);
+        self::replace_members($user_id, $members);
     }
 
     public static function set_status($user_id, $status) {
@@ -176,7 +170,7 @@ class Olama_Users_Temp_Families {
         return array(
             'user' => $user,
             'identity' => $identity,
-            'students' => self::students($user_id),
+            'members' => self::members($user_id),
             'expires_on' => get_user_meta($user_id, self::EXPIRY_META, true),
             'notes' => get_user_meta($user_id, self::NOTES_META, true),
         );
@@ -191,66 +185,92 @@ class Olama_Users_Temp_Families {
         return array_values(array_filter(array_map(array(__CLASS__, 'get'), $ids)));
     }
 
-    public static function student_uids($user_id) {
+    public static function members($user_id) {
         global $wpdb;
-        return $wpdb->get_col($wpdb->prepare(
-            'SELECT student_uid FROM `' . esc_sql(Olama_Users_DB::temp_family_students_table()) . '` WHERE wp_user_id=%d ORDER BY id ASC',
+        $table = Olama_Users_DB::temp_family_students_table();
+        $rows = $wpdb->get_results($wpdb->prepare(
+            'SELECT * FROM `' . esc_sql($table) . '` WHERE wp_user_id=%d ORDER BY id ASC',
             absint($user_id)
-        ));
-    }
-
-    public static function students($user_id) {
-        $uids = self::student_uids($user_id);
-        if (!$uids || !function_exists('olama_core')) {
+        ), ARRAY_A);
+        if (!class_exists('Olama_School_Grade') || !class_exists('Olama_School_Section')) {
             return array();
         }
-        $rows = olama_core()->students()->get_by_uids($uids);
-        $by_uid = array();
+        $members = array();
         foreach ((array) $rows as $row) {
-            $by_uid[(string) $row['student_uid']] = $row;
-        }
-        $ordered = array();
-        foreach ($uids as $uid) {
-            if (isset($by_uid[$uid])) {
-                $ordered[] = $by_uid[$uid];
+            $grade = Olama_School_Grade::get_grade(absint($row['grade_id']));
+            $section = Olama_School_Section::get_section(absint($row['section_id']));
+            if (!$grade || !$section || absint($section->grade_id) !== absint($row['grade_id']) || '' === trim((string) $row['member_name'])) {
+                continue;
             }
+            $members[] = array(
+                'student_uid' => (string) $row['student_uid'],
+                'student_name' => (string) $row['member_name'],
+                'is_local_member' => true,
+                'academic' => array(
+                    'study_year' => isset($section->core_study_year) ? (string) $section->core_study_year : '',
+                    'class_id' => isset($section->core_grade_id) ? (string) $section->core_grade_id : '',
+                    'class_name' => isset($section->grade_name) ? (string) $section->grade_name : (isset($grade->grade_name) ? (string) $grade->grade_name : ''),
+                    'section_id' => isset($section->core_section_id) ? (string) $section->core_section_id : '',
+                    'section_name' => isset($section->section_name) ? (string) $section->section_name : '',
+                    'school_grade_id' => absint($row['grade_id']),
+                    'school_section_id' => absint($row['section_id']),
+                ),
+            );
         }
-        return $ordered;
+        return $members;
     }
 
-    private static function replace_students($user_id, array $uids) {
+    private static function replace_members($user_id, array $members) {
         global $wpdb;
         $table = Olama_Users_DB::temp_family_students_table();
         $wpdb->delete($table, array('wp_user_id' => absint($user_id)), array('%d'));
-        foreach ($uids as $uid) {
-            $wpdb->insert($table, array('wp_user_id' => absint($user_id), 'student_uid' => $uid, 'created_at' => current_time('mysql', true)), array('%d', '%s', '%s'));
+        foreach ($members as $member) {
+            $wpdb->insert($table, array(
+                'wp_user_id' => absint($user_id),
+                'student_uid' => $member['student_uid'],
+                'member_name' => $member['member_name'],
+                'grade_id' => absint($member['grade_id']),
+                'section_id' => absint($member['section_id']),
+                'created_at' => current_time('mysql', true),
+            ), array('%d', '%s', '%s', '%d', '%d', '%s'));
         }
     }
 
-    private static function validate_students(array $uids) {
-        if (!$uids) {
-            return new WP_Error('temp_family_students_required', __('Assign at least one student.', 'olama-users'));
+    private static function validate_members($items) {
+        if (!is_array($items) || !$items) {
+            return new WP_Error('temp_family_members_required', __('Define at least one family member.', 'olama-users'));
         }
-        if (!function_exists('olama_core')) {
-            return new WP_Error('temp_family_core_missing', __('OLAMA Core is required to select students.', 'olama-users'));
+        if (!class_exists('Olama_School_Grade') || !class_exists('Olama_School_Section')) {
+            return new WP_Error('temp_family_school_missing', __('OLAMA School is required to select grades and sections.', 'olama-users'));
         }
-        $valid = array();
-        foreach ($uids as $uid) {
-            if (olama_core()->students()->get_by_uid($uid)) {
-                $valid[] = $uid;
+        $members = array();
+        $seen = array();
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
             }
+            $name = sanitize_text_field(isset($item['name']) ? $item['name'] : '');
+            $grade_id = isset($item['grade_id']) ? absint($item['grade_id']) : 0;
+            $section_id = isset($item['section_id']) ? absint($item['section_id']) : 0;
+            if (!$name || !$grade_id || !$section_id) {
+                return new WP_Error('temp_family_member_incomplete', __('Every member needs a name, grade, and section.', 'olama-users'));
+            }
+            $grade = Olama_School_Grade::get_grade($grade_id);
+            $section = Olama_School_Section::get_section($section_id);
+            if (!$grade || !$section || absint($section->grade_id) !== $grade_id) {
+                return new WP_Error('temp_family_member_section_invalid', __('A selected section does not belong to the selected grade.', 'olama-users'));
+            }
+            $uid = isset($item['uid']) ? sanitize_text_field($item['uid']) : '';
+            if (!$uid || 0 !== strpos($uid, 'LOCAL-MEMBER-') || isset($seen[$uid])) {
+                $uid = 'LOCAL-MEMBER-' . wp_generate_uuid4();
+            }
+            $seen[$uid] = true;
+            $members[] = array('student_uid' => $uid, 'member_name' => $name, 'grade_id' => $grade_id, 'section_id' => $section_id);
         }
-        if (count($valid) !== count($uids)) {
-            return new WP_Error('temp_family_student_invalid', __('One or more selected students no longer exist in OLAMA Core.', 'olama-users'));
+        if (!$members) {
+            return new WP_Error('temp_family_members_required', __('Define at least one family member.', 'olama-users'));
         }
-        return $valid;
-    }
-
-    private static function sanitize_student_uids($uids) {
-        if (!is_array($uids)) {
-            $uids = preg_split('/[\r\n,]+/', (string) $uids);
-        }
-        return array_values(array_unique(array_filter(array_map('sanitize_text_field', $uids), 'strlen')));
+        return $members;
     }
 
     private static function sanitize_expiry($value) {
