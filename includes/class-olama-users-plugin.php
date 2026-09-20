@@ -28,6 +28,8 @@ final class Olama_Users_Plugin {
         add_filter('user_has_cap', array($this, 'enforce_service_access'), 9999, 4);
         add_filter('authenticate', array($this, 'authenticate_family'), 25, 3);
         add_filter('wp_authenticate_user', array($this, 'block_suspended_user'), 20, 2);
+        add_action('admin_init', array($this, 'restrict_temp_family_admin'));
+        add_filter('show_admin_bar', array($this, 'hide_temp_family_admin_bar'));
         add_filter('olama_dashboard_cards', array($this, 'register_hub_card'), 30);
         add_action('olama_users_register_modules', array($this, 'register_access_module'));
         add_action('admin_menu', array('Olama_Users_Registry', 'discover_admin_menus'), PHP_INT_MAX);
@@ -46,6 +48,7 @@ final class Olama_Users_Plugin {
         Olama_Users_Registry::load();
         Olama_Users_Roles::apply_default_deny_policy();
         Olama_Users_Roles::seed_default_capabilities(Olama_Users_Registry::default_capabilities());
+        Olama_Users_Temp_Families::seed_portal_capabilities();
     }
 
     public function enforce_service_access($allcaps, $caps, $args, $user) {
@@ -100,11 +103,30 @@ final class Olama_Users_Plugin {
         if (is_wp_error($user) || !$user instanceof WP_User) {
             return $user;
         }
-        if ('suspended' === get_user_meta($user->ID, 'olama_account_status', true)) {
+        $is_expired = 'temp_family' === get_user_meta($user->ID, 'olama_identity_type', true)
+            && Olama_Users_Temp_Families::is_expired($user->ID);
+        if ('suspended' === get_user_meta($user->ID, 'olama_account_status', true) || $is_expired) {
             Olama_Users_DB::audit('login_blocked', $user->ID, get_user_meta($user->ID, 'olama_identity_type', true), get_user_meta($user->ID, 'olama_oracle_identifier', true), 'blocked');
             return new WP_Error('invalid_username', __('Invalid username or password.', 'olama-users'));
         }
         return $user;
+    }
+
+    public function restrict_temp_family_admin() {
+        if (wp_doing_ajax() || !is_user_logged_in()) {
+            return;
+        }
+        if ('temp_family' === get_user_meta(get_current_user_id(), 'olama_identity_type', true)) {
+            wp_safe_redirect(home_url('/'));
+            exit;
+        }
+    }
+
+    public function hide_temp_family_admin_bar($show) {
+        if (is_user_logged_in() && 'temp_family' === get_user_meta(get_current_user_id(), 'olama_identity_type', true)) {
+            return false;
+        }
+        return $show;
     }
 
     public function authenticate_family($result, $username, $password) {
@@ -161,6 +183,7 @@ final class Olama_Users_Plugin {
             'primary_url' => admin_url('admin.php?page=olama-users'),
             'submenus' => array(
                 array('id' => 'users.accounts', 'label' => __('Accounts', 'olama-users'), 'icon' => 'dashicons-groups', 'url' => admin_url('admin.php?page=olama-users'), 'capability' => 'olama_users_accounts_view', 'color' => '#4f46e5'),
+                array('id' => 'users.temp_families', 'label' => __('Temp Families', 'olama-users'), 'icon' => 'dashicons-clock', 'url' => admin_url('admin.php?page=olama-users-temp-families'), 'capability' => 'olama_users_temp_families_manage', 'color' => '#4f46e5'),
                 array('id' => 'users.roles', 'label' => __('Roles', 'olama-users'), 'icon' => 'dashicons-id-alt', 'url' => admin_url('admin.php?page=olama-users-roles'), 'capability' => 'olama_users_roles_manage', 'color' => '#4f46e5'),
                 array('id' => 'users.matrix', 'label' => __('Capabilities', 'olama-users'), 'icon' => 'dashicons-privacy', 'url' => admin_url('admin.php?page=olama-users-matrix'), 'capability' => 'olama_users_matrix_manage', 'color' => '#4f46e5'),
                 array('id' => 'users.settings', 'label' => __('Settings', 'olama-users'), 'icon' => 'dashicons-admin-settings', 'url' => admin_url('admin.php?page=olama-users-settings'), 'capability' => 'olama_users_settings_manage', 'color' => '#4f46e5'),
@@ -187,6 +210,7 @@ final class Olama_Users_Plugin {
                         array('id' => 'olama_users.accounts.apply', 'type' => 'action', 'label' => __('Apply synchronization', 'olama-users'), 'capability' => 'olama_users_sync_apply'),
                     ),
                 ),
+                array('id' => 'olama_users.temp_families', 'type' => 'submenu', 'label' => __('Manage Temp Families', 'olama-users'), 'capability' => 'olama_users_temp_families_manage'),
                 array('id' => 'olama_users.roles', 'type' => 'submenu', 'label' => __('Manage roles', 'olama-users'), 'capability' => 'olama_users_roles_manage'),
                 array('id' => 'olama_users.capabilities', 'type' => 'submenu', 'label' => __('Manage capabilities', 'olama-users'), 'capability' => 'olama_users_matrix_manage'),
                 array('id' => 'olama_users.settings', 'type' => 'submenu', 'label' => __('Manage password settings', 'olama-users'), 'capability' => 'olama_users_settings_manage'),

@@ -12,6 +12,7 @@ class Olama_Users_DB {
         $collate = $wpdb->get_charset_collate();
         $identities = $wpdb->prefix . 'olama_user_identities';
         $audit = $wpdb->prefix . 'olama_user_audit_log';
+        $temp_students = $wpdb->prefix . 'olama_temp_family_students';
 
         dbDelta("CREATE TABLE {$identities} (
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -46,6 +47,16 @@ class Olama_Users_DB {
             KEY idx_created (created_at)
         ) {$collate};");
 
+        dbDelta("CREATE TABLE {$temp_students} (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            wp_user_id BIGINT UNSIGNED NOT NULL,
+            student_uid VARCHAR(100) NOT NULL,
+            created_at DATETIME NOT NULL,
+            PRIMARY KEY  (id),
+            UNIQUE KEY uniq_temp_student (wp_user_id, student_uid),
+            KEY idx_student_uid (student_uid)
+        ) {$collate};");
+
         update_option('olama_users_db_version', OLAMA_USERS_VERSION);
     }
 
@@ -57,6 +68,11 @@ class Olama_Users_DB {
     public static function audit_table() {
         global $wpdb;
         return $wpdb->prefix . 'olama_user_audit_log';
+    }
+
+    public static function temp_family_students_table() {
+        global $wpdb;
+        return $wpdb->prefix . 'olama_temp_family_students';
     }
 
     public static function get_identity($type, $oracle_identifier) {
@@ -76,7 +92,7 @@ class Olama_Users_DB {
         ), ARRAY_A);
     }
 
-    public static function save_identity($user_id, $type, $oracle_identifier, $status = 'active') {
+    public static function save_identity($user_id, $type, $oracle_identifier, $status = 'active', $source_system = 'oracle') {
         global $wpdb;
         $table = self::identities_table();
         $existing = self::get_identity($type, $oracle_identifier);
@@ -86,7 +102,7 @@ class Olama_Users_DB {
             'identity_type' => sanitize_key($type),
             'oracle_identifier' => (string) $oracle_identifier,
             'account_status' => 'active' === $status ? 'active' : 'suspended',
-            'source_system' => 'oracle',
+            'source_system' => sanitize_key($source_system) ?: 'oracle',
             'last_synced_at' => $now,
             'updated_at' => $now,
         );

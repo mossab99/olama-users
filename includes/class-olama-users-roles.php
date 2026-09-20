@@ -21,6 +21,7 @@ class Olama_Users_Roles {
     public static function definitions() {
         return array(
             'olama_family' => __('Family', 'olama-users'),
+            'olama_temp_family' => __('Temp Family', 'olama-users'),
             'olama_employee_no_access' => __('Employee — No Access', 'olama-users'),
             'olama_teacher' => __('Teacher', 'olama-users'),
             'olama_exam_coordinator' => __('Exam Coordinator', 'olama-users'),
@@ -46,6 +47,7 @@ class Olama_Users_Roles {
             'olama_users_sync_preview',
             'olama_users_sync_apply',
             'olama_users_audit_view',
+            'olama_users_temp_families_manage',
         );
     }
 
@@ -119,8 +121,18 @@ class Olama_Users_Roles {
             update_option(self::SEEDED_OPTION, 1, false);
         }
 
+        // Temp Family is a required system role introduced after the original
+        // seed pass, so existing installations must receive it as well.
+        if (!get_role('olama_temp_family')) {
+            self::unsuppress('olama_temp_family');
+            add_role('olama_temp_family', $definitions['olama_temp_family'], array('read' => true));
+        }
+
         $metadata = self::metadata();
         foreach ($definitions as $key => $label) {
+            if (get_role($key)) {
+                self::approve($key);
+            }
             if (get_role($key) && !isset($metadata[$key])) {
                 $metadata[$key] = array(
                     'managed' => true,
@@ -313,7 +325,7 @@ class Olama_Users_Roles {
     }
 
     public static function is_protected($key) {
-        return 'administrator' === sanitize_key($key);
+        return in_array(sanitize_key($key), array('administrator', 'olama_temp_family'), true);
     }
 
     public static function editable() {
@@ -341,8 +353,8 @@ class Olama_Users_Roles {
                 'capabilities' => count(array_filter($definition['capabilities'])),
                 'users' => isset($role_counts[$key]) ? (int) $role_counts[$key] : 0,
                 'managed' => $managed,
-                'editable' => 'administrator' !== $key,
-                'protected' => 'administrator' === $key,
+                'editable' => !self::is_protected($key),
+                'protected' => self::is_protected($key),
                 'source' => $managed ? (!empty($metadata[$key]['origin']) ? $metadata[$key]['origin'] : 'olama') : (in_array($key, $core, true) ? 'wordpress' : 'external'),
                 'dependencies' => self::dependencies($key),
             );
@@ -473,8 +485,8 @@ class Olama_Users_Roles {
         if (!get_role($key)) {
             return new WP_Error('role_missing', __('Role not found.', 'olama-users'));
         }
-        if ('administrator' === $key) {
-            return new WP_Error('protected_role', __('Administrator cannot be edited.', 'olama-users'));
+        if (self::is_protected($key)) {
+            return new WP_Error('protected_role', __('This system role cannot be edited.', 'olama-users'));
         }
         $wp_roles = wp_roles();
         $old_label = isset($wp_roles->roles[$key]['name']) ? $wp_roles->roles[$key]['name'] : $key;
@@ -489,8 +501,8 @@ class Olama_Users_Roles {
         if (!get_role($key)) {
             return new WP_Error('role_missing', __('Role not found.', 'olama-users'));
         }
-        if ('administrator' === $key) {
-            return new WP_Error('protected_role', __('Administrator cannot be deleted.', 'olama-users'));
+        if (self::is_protected($key)) {
+            return new WP_Error('protected_role', __('This system role cannot be deleted.', 'olama-users'));
         }
         $replacement = 'subscriber';
         if ('subscriber' !== $key && !get_role($replacement)) {

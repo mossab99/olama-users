@@ -16,12 +16,15 @@ class Olama_Users_Admin {
         add_action('admin_post_olama_users_role_action', array($this, 'handle_role_action'));
         add_action('admin_post_olama_users_assign_role', array($this, 'handle_assign_role'));
         add_action('admin_post_olama_users_save_settings', array($this, 'handle_settings'));
+        add_action('admin_post_olama_users_temp_family', array($this, 'handle_temp_family'));
+        add_action('wp_ajax_olama_users_search_students', array($this, 'ajax_search_students'));
         add_action('admin_enqueue_scripts', array($this, 'assets'));
     }
 
     public function menus() {
         add_menu_page(__('OLAMA Users', 'olama-users'), __('OLAMA Users', 'olama-users'), 'olama_users_access', 'olama-users', array($this, 'accounts'), 'dashicons-admin-users', 27);
         add_submenu_page('olama-users', __('Accounts', 'olama-users'), __('Accounts', 'olama-users'), 'olama_users_accounts_view', 'olama-users', array($this, 'accounts'));
+        add_submenu_page('olama-users', __('Temp Families', 'olama-users'), __('Temp Families', 'olama-users'), 'olama_users_temp_families_manage', 'olama-users-temp-families', array($this, 'temp_families'));
         add_submenu_page('olama-users', __('Roles', 'olama-users'), __('Roles', 'olama-users'), 'olama_users_roles_manage', 'olama-users-roles', array($this, 'roles'));
         add_submenu_page('olama-users', __('Capabilities', 'olama-users'), __('Capabilities', 'olama-users'), 'olama_users_matrix_manage', 'olama-users-matrix', array($this, 'matrix'));
         add_submenu_page('olama-users', __('Settings', 'olama-users'), __('Settings', 'olama-users'), 'olama_users_settings_manage', 'olama-users-settings', array($this, 'settings'));
@@ -34,7 +37,67 @@ class Olama_Users_Admin {
         }
         $asset_version = OLAMA_USERS_VERSION . '.' . (string) @filemtime(OLAMA_USERS_PATH . 'assets/admin.css');
         wp_enqueue_style('olama-users-admin', OLAMA_USERS_URL . 'assets/admin.css', array(), $asset_version);
+        wp_enqueue_style('olama-users-temp-families', OLAMA_USERS_URL . 'assets/temp-families.css', array('olama-users-admin'), OLAMA_USERS_VERSION . '.' . (string) @filemtime(OLAMA_USERS_PATH . 'assets/temp-families.css'));
         wp_enqueue_script('olama-users-admin', OLAMA_USERS_URL . 'assets/admin.js', array(), $asset_version, true);
+        wp_localize_script('olama-users-admin', 'olamaUsersAdmin', array(
+            'studentSearchNonce' => wp_create_nonce('olama_users_student_search'),
+            'searching' => __('Searching…', 'olama-users'),
+            'noStudents' => __('No matching students found.', 'olama-users'),
+            'remove' => __('Remove', 'olama-users'),
+        ));
+    }
+
+    public function handle_temp_family() {
+        $this->authorize('olama_users_temp_families_manage');
+        check_admin_referer('olama_users_temp_family');
+        $operation = isset($_POST['operation']) ? sanitize_key(wp_unslash($_POST['operation'])) : '';
+        $user_id = isset($_POST['user_id']) ? absint($_POST['user_id']) : 0;
+        if ('create' === $operation) {
+            $result = Olama_Users_Temp_Families::create(wp_unslash($_POST));
+            $message = __('Temp Family account created.', 'olama-users');
+        } elseif ('update' === $operation) {
+            $result = Olama_Users_Temp_Families::update($user_id, wp_unslash($_POST));
+            $message = __('Temp Family account updated.', 'olama-users');
+        } elseif ('activate' === $operation || 'deactivate' === $operation) {
+            $result = Olama_Users_Temp_Families::set_status($user_id, 'activate' === $operation ? 'active' : 'suspended');
+            $message = 'activate' === $operation ? __('Temp Family account activated.', 'olama-users') : __('Temp Family account deactivated and signed out.', 'olama-users');
+        } elseif ('reset_password' === $operation) {
+            $result = Olama_Users_Temp_Families::reset_password($user_id, isset($_POST['password']) ? wp_unslash($_POST['password']) : '');
+            $message = __('Password updated and existing sessions signed out.', 'olama-users');
+        } else {
+            $result = new WP_Error('temp_family_invalid_operation', __('Unknown Temp Family operation.', 'olama-users'));
+            $message = '';
+        }
+        $notice = is_wp_error($result)
+            ? array('type' => 'error', 'message' => $result->get_error_message())
+            : array('type' => 'success', 'message' => $message);
+        set_transient('olama_users_temp_family_notice_' . get_current_user_id(), $notice, 5 * MINUTE_IN_SECONDS);
+        $args = array('page' => 'olama-users-temp-families');
+        if (!is_wp_error($result) && in_array($operation, array('create', 'update'), true)) {
+            $args['edit'] = absint($result);
+        }
+        wp_safe_redirect(add_query_arg($args, admin_url('admin.php')));
+        exit;
+    }
+
+    public function ajax_search_students() {
+        $this->authorize('olama_users_temp_families_manage');
+        check_ajax_referer('olama_users_student_search', 'nonce');
+        $term = isset($_GET['term']) ? sanitize_text_field(wp_unslash($_GET['term'])) : '';
+        if (strlen($term) < 2 || !function_exists('olama_core')) {
+            wp_send_json_success(array());
+        }
+        $rows = olama_core()->students()->search($term, array('limit' => 20));
+        $results = array();
+        foreach ((array) $rows as $row) {
+            $results[] = array(
+                'uid' => (string) $row['student_uid'],
+                'name' => (string) $row['student_name'],
+                'family_id' => isset($row['oracle_family_id']) ? (string) $row['oracle_family_id'] : '',
+                'student_id' => isset($row['oracle_student_id']) ? (string) $row['oracle_student_id'] : '',
+            );
+        }
+        wp_send_json_success($results);
     }
 
     public function handle_sync() {
@@ -328,7 +391,7 @@ class Olama_Users_Admin {
         if (!in_array($tab, array('available', 'add', 'users'), true)) {
             $tab = 'available';
         }
-        echo '<div class="wrap olama-users-wrap"><h1>' . esc_html__('OLAMA Roles', 'olama-users') . '</h1><p>' . esc_html__('Review and manage every role. Only WordPress Administrator is protected.', 'olama-users') . '</p>';
+        echo '<div class="wrap olama-users-wrap"><h1>' . esc_html__('OLAMA Roles', 'olama-users') . '</h1><p>' . esc_html__('Review and manage roles. Administrator and required system roles are protected.', 'olama-users') . '</p>';
         $this->render_role_notice();
         $tabs = array(
             'available' => __('Available Roles', 'olama-users'),
@@ -364,7 +427,7 @@ class Olama_Users_Admin {
 
     private function render_available_roles() {
         $roles = Olama_Users_Roles::all();
-        echo '<section class="olama-users-panel olama-roles-panel"><div class="olama-panel-heading"><div><h2>' . esc_html__('Available Roles', 'olama-users') . '</h2><p>' . esc_html__('Rename or delete any role except Administrator. Deleted-role users move to Subscriber, and matching import defaults are cleared.', 'olama-users') . '</p></div><a class="button button-primary" href="' . esc_url(add_query_arg(array('page' => 'olama-users-roles', 'tab' => 'add'), admin_url('admin.php'))) . '">' . esc_html__('Add role', 'olama-users') . '</a></div>';
+        echo '<section class="olama-users-panel olama-roles-panel"><div class="olama-panel-heading"><div><h2>' . esc_html__('Available Roles', 'olama-users') . '</h2><p>' . esc_html__('Custom roles can be renamed or deleted. Deleted-role users move to Subscriber, and matching import defaults are cleared.', 'olama-users') . '</p></div><a class="button button-primary" href="' . esc_url(add_query_arg(array('page' => 'olama-users-roles', 'tab' => 'add'), admin_url('admin.php'))) . '">' . esc_html__('Add role', 'olama-users') . '</a></div>';
         echo '<div class="olama-role-table-wrap"><table class="widefat striped olama-role-table"><thead><tr><th>' . esc_html__('Role', 'olama-users') . '</th><th>' . esc_html__('Permanent key', 'olama-users') . '</th><th>' . esc_html__('Owner', 'olama-users') . '</th><th>' . esc_html__('Users', 'olama-users') . '</th><th>' . esc_html__('Capabilities', 'olama-users') . '</th><th>' . esc_html__('Management', 'olama-users') . '</th></tr></thead><tbody>';
         foreach ($roles as $role) {
             echo '<tr><td><strong>' . esc_html($role['label']) . '</strong>';
@@ -473,6 +536,87 @@ class Olama_Users_Admin {
             'external' => __('Plugin or legacy', 'olama-users'),
         );
         return isset($labels[$source]) ? $labels[$source] : $source;
+    }
+
+    public function temp_families() {
+        $this->authorize('olama_users_temp_families_manage');
+        $accounts = Olama_Users_Temp_Families::all();
+        $edit_id = isset($_GET['edit']) ? absint($_GET['edit']) : 0;
+        $editing = $edit_id ? Olama_Users_Temp_Families::get($edit_id) : null;
+        $notice_key = 'olama_users_temp_family_notice_' . get_current_user_id();
+        $notice = get_transient($notice_key);
+        if (false !== $notice) {
+            delete_transient($notice_key);
+        }
+
+        echo '<div class="wrap olama-users-wrap"><div class="olama-panel-heading"><div><span class="olama-eyebrow">' . esc_html__('Local access', 'olama-users') . '</span><h1>' . esc_html__('Temp Families', 'olama-users') . '</h1><p>' . esc_html__('Create local, temporary access to explicitly assigned students. These accounts are never synchronized with OLAMA Core.', 'olama-users') . '</p></div>';
+        if ($editing) {
+            echo '<a class="button" href="' . esc_url(add_query_arg('page', 'olama-users-temp-families', admin_url('admin.php'))) . '">' . esc_html__('Create another account', 'olama-users') . '</a>';
+        }
+        echo '</div>';
+        if (is_array($notice)) {
+            echo '<div class="notice ' . esc_attr('error' === $notice['type'] ? 'notice-error' : 'notice-success') . ' is-dismissible"><p>' . esc_html($notice['message']) . '</p></div>';
+        }
+
+        $this->render_temp_family_form($editing);
+        echo '<section class="olama-users-panel olama-temp-list"><h2>' . esc_html__('Temporary accounts', 'olama-users') . '</h2><div class="olama-role-table-wrap"><table class="widefat striped"><thead><tr><th>' . esc_html__('Account', 'olama-users') . '</th><th>' . esc_html__('Assigned students', 'olama-users') . '</th><th>' . esc_html__('Expiry', 'olama-users') . '</th><th>' . esc_html__('Status', 'olama-users') . '</th><th>' . esc_html__('Actions', 'olama-users') . '</th></tr></thead><tbody>';
+        if (!$accounts) {
+            echo '<tr><td colspan="5">' . esc_html__('No Temp Family accounts have been created.', 'olama-users') . '</td></tr>';
+        }
+        foreach ($accounts as $account) {
+            $user = $account['user'];
+            $expired = Olama_Users_Temp_Families::is_expired($user->ID);
+            $active = 'active' === $account['identity']['account_status'] && !$expired;
+            echo '<tr><td><strong>' . esc_html($user->display_name) . '</strong><br><code>' . esc_html($user->user_login) . '</code>';
+            if ($user->user_email) {
+                echo '<br><small>' . esc_html($user->user_email) . '</small>';
+            }
+            echo '</td><td>';
+            foreach ($account['students'] as $student) {
+                echo '<span class="olama-temp-student-summary"><strong>' . esc_html($student['student_name']) . '</strong> <code>' . esc_html($student['student_uid']) . '</code></span>';
+            }
+            echo '</td><td>' . esc_html($account['expires_on'] ?: __('No expiry', 'olama-users')) . '</td><td><span class="olama-temp-status ' . esc_attr($active ? 'is-active' : 'is-inactive') . '">' . esc_html($expired ? __('Expired', 'olama-users') : ('active' === $account['identity']['account_status'] ? __('Active', 'olama-users') : __('Deactivated', 'olama-users'))) . '</span></td><td><div class="olama-temp-actions"><a class="button button-small" href="' . esc_url(add_query_arg(array('page' => 'olama-users-temp-families', 'edit' => $user->ID), admin_url('admin.php'))) . '">' . esc_html__('Edit', 'olama-users') . '</a>';
+            $next_operation = 'active' === $account['identity']['account_status'] ? 'deactivate' : 'activate';
+            echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="olama_users_temp_family"><input type="hidden" name="operation" value="' . esc_attr($next_operation) . '"><input type="hidden" name="user_id" value="' . esc_attr($user->ID) . '">';
+            wp_nonce_field('olama_users_temp_family');
+            echo '<button class="button button-small ' . ('deactivate' === $next_operation ? 'button-link-delete' : '') . '">' . esc_html('deactivate' === $next_operation ? __('Deactivate', 'olama-users') : __('Activate', 'olama-users')) . '</button></form></div></td></tr>';
+        }
+        echo '</tbody></table></div></section></div>';
+    }
+
+    private function render_temp_family_form($account) {
+        $editing = is_array($account);
+        $user = $editing ? $account['user'] : null;
+        $students = $editing ? $account['students'] : array();
+        echo '<section class="olama-users-panel olama-temp-editor"><h2>' . esc_html($editing ? __('Edit Temp Family', 'olama-users') : __('Create Temp Family', 'olama-users')) . '</h2>';
+        echo '<form class="olama-temp-family-form" method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="olama_users_temp_family"><input type="hidden" name="operation" value="' . esc_attr($editing ? 'update' : 'create') . '">';
+        if ($editing) {
+            echo '<input type="hidden" name="user_id" value="' . esc_attr($user->ID) . '">';
+        }
+        wp_nonce_field('olama_users_temp_family');
+        echo '<div class="olama-temp-grid"><label><span>' . esc_html__('Display name', 'olama-users') . '</span><input type="text" name="display_name" required maxlength="100" value="' . esc_attr($editing ? $user->display_name : '') . '"></label>';
+        echo '<label><span>' . esc_html__('Username', 'olama-users') . '</span><input type="text" name="user_login" ' . ($editing ? 'disabled' : 'required') . ' maxlength="60" value="' . esc_attr($editing ? $user->user_login : 'tf_') . '"><small>' . esc_html__('Local usernames use the tf_ prefix.', 'olama-users') . '</small></label>';
+        echo '<label><span>' . esc_html__('Email (optional)', 'olama-users') . '</span><input type="email" name="user_email" value="' . esc_attr($editing ? $user->user_email : '') . '"></label>';
+        echo '<label><span>' . esc_html__('Valid through (optional)', 'olama-users') . '</span><input type="date" name="expires_on" value="' . esc_attr($editing ? $account['expires_on'] : '') . '"><small>' . esc_html__('Access expires after this date.', 'olama-users') . '</small></label>';
+        if (!$editing) {
+            echo '<label><span>' . esc_html__('Initial password', 'olama-users') . '</span><input type="password" name="password" required minlength="12" autocomplete="new-password"><small>' . esc_html__('At least 12 characters. Copy it before creating the account; it is never displayed or stored as plain text.', 'olama-users') . '</small></label>';
+        }
+        echo '<label class="is-wide"><span>' . esc_html__('Internal notes (optional)', 'olama-users') . '</span><textarea name="notes" rows="3">' . esc_textarea($editing ? $account['notes'] : '') . '</textarea></label></div>';
+        echo '<div class="olama-temp-student-picker" data-temp-student-picker><h3>' . esc_html__('Assigned students', 'olama-users') . '</h3><p>' . esc_html__('Only students selected here will be accessible from this account.', 'olama-users') . '</p><div class="olama-temp-search"><input type="search" data-student-search placeholder="' . esc_attr__('Search by student name, ID, or family number', 'olama-users') . '"><button type="button" class="button" data-student-search-button>' . esc_html__('Search', 'olama-users') . '</button></div><div class="olama-temp-search-results" data-student-search-results></div><div class="olama-temp-selected" data-student-selected>';
+        foreach ($students as $student) {
+            $this->render_temp_student_chip($student);
+        }
+        echo '</div></div><p><button class="button button-primary">' . esc_html($editing ? __('Save changes', 'olama-users') : __('Create Temp Family', 'olama-users')) . '</button></p></form>';
+        if ($editing) {
+            echo '<hr><form class="olama-temp-password-form" method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><input type="hidden" name="action" value="olama_users_temp_family"><input type="hidden" name="operation" value="reset_password"><input type="hidden" name="user_id" value="' . esc_attr($user->ID) . '">';
+            wp_nonce_field('olama_users_temp_family');
+            echo '<label><span>' . esc_html__('New password', 'olama-users') . '</span><input type="password" name="password" required minlength="12" autocomplete="new-password"></label><button class="button">' . esc_html__('Reset password and sign out sessions', 'olama-users') . '</button></form>';
+        }
+        echo '</section>';
+    }
+
+    private function render_temp_student_chip(array $student) {
+        echo '<span class="olama-temp-student" data-student-uid="' . esc_attr($student['student_uid']) . '"><input type="hidden" name="student_uids[]" value="' . esc_attr($student['student_uid']) . '"><strong>' . esc_html($student['student_name']) . '</strong><small>' . esc_html($student['student_uid']) . '</small><button type="button" class="button-link-delete" data-remove-student aria-label="' . esc_attr__('Remove student', 'olama-users') . '">&times;</button></span>';
     }
 
     public function matrix() {
