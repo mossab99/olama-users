@@ -17,6 +17,8 @@ class Olama_Users_Admin {
         add_action('admin_post_olama_users_assign_role', array($this, 'handle_assign_role'));
         add_action('admin_post_olama_users_save_settings', array($this, 'handle_settings'));
         add_action('admin_post_olama_users_temp_family', array($this, 'handle_temp_family'));
+        add_action('admin_post_olama_users_ministry_review', array($this, 'handle_ministry_review'));
+        add_action('admin_post_olama_users_ministry_config', array($this, 'handle_ministry_config'));
         add_action('admin_enqueue_scripts', array($this, 'assets'));
     }
 
@@ -28,6 +30,151 @@ class Olama_Users_Admin {
         add_submenu_page('olama-users', __('Capabilities', 'olama-users'), __('Capabilities', 'olama-users'), 'olama_users_matrix_manage', 'olama-users-matrix', array($this, 'matrix'));
         add_submenu_page('olama-users', __('Settings', 'olama-users'), __('Settings', 'olama-users'), 'olama_users_settings_manage', 'olama-users-settings', array($this, 'settings'));
         add_submenu_page('olama-users', __('Audit Log', 'olama-users'), __('Audit Log', 'olama-users'), 'olama_users_audit_view', 'olama-users-audit', array($this, 'audit'));
+        add_submenu_page('olama-users', 'البيانات الإحصائية للطلبة', 'البيانات الإحصائية للطلبة', 'olama_users_ministry_view', 'olama-users-ministry', array($this, 'ministry'));
+    }
+
+    public function ministry() {
+        if (!current_user_can('olama_users_ministry_view')) {
+            wp_die(esc_html__('Access denied.', 'olama-users'));
+        }
+        echo '<div class="wrap"><h1>البيانات الإحصائية للطلبة</h1>';
+        if (!function_exists('olama_core')) {
+            echo '<p>OLAMA Core غير متاح.</p></div>';
+            return;
+        }
+        $academic = olama_core()->academic_context()->current();
+        $default_year = $academic && !empty($academic->study_year) ? (string) $academic->study_year : '';
+        $year = isset($_GET['study_year']) ? sanitize_text_field(wp_unslash($_GET['study_year'])) : $default_year;
+        $grade = isset($_GET['grade']) ? sanitize_text_field(wp_unslash($_GET['grade'])) : '';
+        $section = isset($_GET['section']) ? sanitize_text_field(wp_unslash($_GET['section'])) : '';
+        $status_filter = isset($_GET['status']) ? strtoupper(sanitize_key(wp_unslash($_GET['status']))) : '';
+        $field_filter = isset($_GET['missing_field']) ? sanitize_key(wp_unslash($_GET['missing_field'])) : '';
+        $search = isset($_GET['student_search']) ? sanitize_text_field(wp_unslash($_GET['student_search'])) : '';
+        $family_filter = isset($_GET['family']) ? sanitize_text_field(wp_unslash($_GET['family'])) : '';
+        echo '<form method="get"><input type="hidden" name="page" value="olama-users-ministry">';
+        echo '<label>العام الدراسي <select name="study_year" required><option value="">اختر العام</option>';
+        foreach (olama_core()->student_statistics()->study_years() as $possible_year) {
+            echo '<option value="' . esc_attr($possible_year) . '"' . selected($year, $possible_year, false) . '>' . esc_html($possible_year) . '</option>';
+        }
+        echo '</select></label> ';
+        echo '<label>معرف الصف <input name="grade" value="' . esc_attr($grade) . '"></label> ';
+        echo '<label>معرف الشعبة <input name="section" value="' . esc_attr($section) . '"></label> ';
+        echo '<label>الحالة <select name="status"><option value="">كل الحالات</option>';
+        foreach (array('COMPLETE', 'NEEDS_FAMILY', 'NEEDS_SCHOOL', 'NEEDS_REVIEW') as $possible) {
+            echo '<option value="' . esc_attr($possible) . '"' . selected($status_filter, $possible, false) . '>' . esc_html($possible) . '</option>';
+        }
+        echo '</select></label> ';
+        echo '<label>حقل ناقص <input name="missing_field" value="' . esc_attr($field_filter) . '"></label> ';
+        echo '<label>بحث الطالب <input name="student_search" value="' . esc_attr($search) . '"></label> ';
+        echo '<label>معرف الأسرة <input name="family" value="' . esc_attr($family_filter) . '"></label> ';
+        echo '<button class="button button-primary">عرض</button></form>';
+        if ($year === '') {
+            echo '<p>اختر العام الدراسي.</p></div>';
+            return;
+        }
+        if (current_user_can('olama_users_ministry_configure')) {
+            $schools = olama_core()->student_statistics()->schools($year);
+            foreach ($schools as $school_row) {
+                $config = olama_core()->student_statistics()->school_config($school_row['school_id']);
+                echo '<h2>بيانات المدرسة: ' . esc_html($school_row['school_name']) . '</h2><form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
+                wp_nonce_field('olama_users_ministry_config');
+                echo '<input type="hidden" name="action" value="olama_users_ministry_config">';
+                echo '<input type="hidden" name="school_id" value="' . esc_attr($school_row['school_id']) . '">';
+                echo '<label>الرقم الوطني للمدرسة <input name="school_national_id" value="' . esc_attr(isset($config['school_national_id']) ? $config['school_national_id'] : '') . '"></label> ';
+                echo '<label>الرقم الوطني للبناء <input name="building_national_id" value="' . esc_attr(isset($config['building_national_id']) ? $config['building_national_id'] : '') . '"></label> ';
+                echo '<button class="button">حفظ</button></form>';
+            }
+        }
+        $report = olama_core()->student_statistics()->population($year, $grade, $section);
+        $summary = $report['summary'];
+        echo '<h2>ملخص الطلاب المسجلين</h2><table class="widefat striped"><thead><tr><th>الإجمالي</th><th>جاهز للوزارة</th><th>بانتظار الأسرة</th><th>نواقص مدرسية</th><th>تحتاج مراجعة</th></tr></thead><tbody><tr>';
+        foreach (array('TOTAL', 'COMPLETE', 'NEEDS_FAMILY', 'NEEDS_SCHOOL', 'NEEDS_REVIEW') as $key) {
+            echo '<td>' . esc_html(number_format_i18n($summary[$key])) . '</td>';
+        }
+        echo '</tr></tbody></table>';
+        echo '<p>مؤشرات متداخلة: لديهم بيانات عائلية ناقصة ' . esc_html($report['causes']['family']) .
+            ' · لديهم نواقص مدرسية ' . esc_html($report['causes']['school']) .
+            ' · لديهم عناصر تحت المراجعة ' . esc_html($report['causes']['review']) . '</p>';
+        $temp_members = 0;
+        foreach (Olama_Users_Temp_Families::all() as $account) {
+            if (isset($account['identity']['account_status']) && $account['identity']['account_status'] === 'active') {
+                $temp_members += count($account['members']);
+            }
+        }
+        echo '<p>أعضاء الحسابات المؤقتة غير المدرجين في إحصائية الوزارة: ' . esc_html($temp_members) . '</p>';
+        echo '<h2>حسب الصف</h2><table class="widefat striped"><thead><tr><th>الصف</th><th>الإجمالي</th><th>مكتمل</th><th>بانتظار الأسرة</th><th>نواقص مدرسية</th><th>مراجعة</th></tr></thead><tbody>';
+        foreach ($report['grades'] as $grade_id => $counts) {
+            $grade_url = add_query_arg(array('page' => 'olama-users-ministry', 'study_year' => $year, 'grade' => $grade_id), admin_url('admin.php'));
+            echo '<tr><td><a href="' . esc_url($grade_url) . '">' . esc_html($counts['name']) . '</a></td>';
+            foreach (array('TOTAL', 'COMPLETE', 'NEEDS_FAMILY', 'NEEDS_SCHOOL', 'NEEDS_REVIEW') as $key) echo '<td>' . esc_html($counts[$key]) . '</td>';
+            echo '</tr>';
+        }
+        echo '</tbody></table>';
+        echo '<h2>الحقول المسببة للنقص</h2><ul>';
+        foreach ($report['missing_fields'] as $field_key => $count) {
+            $url = add_query_arg(array('page' => 'olama-users-ministry', 'study_year' => $year, 'grade' => $grade, 'section' => $section, 'missing_field' => $field_key), admin_url('admin.php'));
+            echo '<li><a href="' . esc_url($url) . '">' . esc_html($field_key) . '</a>: ' . esc_html($count) . '</li>';
+        }
+        echo '</ul>';
+        echo '<h2>الطلاب</h2><table class="widefat striped"><thead><tr><th>الطالب</th><th>المعرف</th><th>الأسرة</th><th>الصف</th><th>الشعبة</th><th>الحالة</th><th>النواقص</th><th>الحقول</th></tr></thead><tbody>';
+        foreach ($report['students'] as $row) {
+            if ($status_filter && $row['status'] !== $status_filter) continue;
+            if ($field_filter && !in_array($field_filter, $row['issues'], true)) continue;
+            if ($family_filter && $row['family_uid'] !== $family_filter) continue;
+            if ($search && stripos($row['name'] . ' ' . $row['student_uid'], $search) === false) continue;
+            echo '<tr><td>' . esc_html($row['name']) . '</td><td>' . esc_html($row['student_uid']) . '</td><td>' . esc_html($row['family_uid']) . '</td><td>' . esc_html($row['grade']) . '</td><td>' . esc_html($row['section']) . '</td><td>' . esc_html($row['status']) . '</td><td>' . esc_html($row['missing']) . '</td><td>' . esc_html(implode('، ', $row['issues'])) . '</td></tr>';
+        }
+        echo '</tbody></table>';
+        echo '<h2>الأسر التي لديها نواقص</h2><table class="widefat striped"><thead><tr><th>معرف الأسرة</th><th>عدد الأبناء</th><th>غير مكتمل</th></tr></thead><tbody>';
+        foreach ($report['families'] as $family_uid => $counts) {
+            if (!$counts['INCOMPLETE']) continue;
+            echo '<tr><td>' . esc_html($family_uid) . '</td><td>' . esc_html($counts['TOTAL']) . '</td><td>' . esc_html($counts['INCOMPLETE']) . '</td></tr>';
+        }
+        echo '</tbody></table>';
+        if (current_user_can('olama_users_ministry_review')) {
+            $pending = olama_core()->student_statistics()->pending_submissions($year);
+            echo '<h2>طلبات بانتظار المراجعة</h2>';
+            if (!$pending) echo '<p>لا توجد طلبات معلقة.</p>';
+            foreach ($pending as $item) {
+                echo '<div class="card"><p>' . esc_html($item['student_uid']) . ' · ' . esc_html($item['field_key']) . ' · ' . esc_html($item['readiness_impact']) . ' · ' . esc_html($item['submitted_at']) . '</p>';
+                echo '<p>القيمة الحالية: ' . esc_html($item['current_value'] ?: '—') . '<br>القيمة المقترحة: ' . esc_html($item['proposed_value']) . '</p>';
+                foreach (array('approve' => 'اعتماد', 'reject' => 'رفض') as $decision => $label) {
+                    echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" style="display:inline-block;margin-inline-end:8px">';
+                    wp_nonce_field('olama_users_ministry_review_' . $item['id']);
+                    echo '<input type="hidden" name="action" value="olama_users_ministry_review"><input type="hidden" name="submission_id" value="' . esc_attr($item['id']) . '"><input type="hidden" name="decision" value="' . esc_attr($decision) . '"><button class="button">' . esc_html($label) . '</button></form>';
+                }
+                echo '</div>';
+            }
+        }
+        echo '</div>';
+    }
+
+    public function handle_ministry_review() {
+        if (!current_user_can('olama_users_ministry_review') || !function_exists('olama_core')) {
+            wp_die(esc_html__('Access denied.', 'olama-users'));
+        }
+        $id = isset($_POST['submission_id']) ? absint($_POST['submission_id']) : 0;
+        check_admin_referer('olama_users_ministry_review_' . $id);
+        $decision = isset($_POST['decision']) ? sanitize_key(wp_unslash($_POST['decision'])) : '';
+        if (!in_array($decision, array('approve', 'reject'), true)) wp_die('Invalid decision.');
+        $result = olama_core()->student_statistics()->review($id, $decision === 'approve', get_current_user_id());
+        if (is_wp_error($result)) wp_die(esc_html($result->get_error_message()));
+        wp_safe_redirect(admin_url('admin.php?page=olama-users-ministry'));
+        exit;
+    }
+
+    public function handle_ministry_config() {
+        if (!current_user_can('olama_users_ministry_configure') || !function_exists('olama_core')) {
+            wp_die(esc_html__('Access denied.', 'olama-users'));
+        }
+        check_admin_referer('olama_users_ministry_config');
+        $school = isset($_POST['school_national_id']) ? wp_unslash($_POST['school_national_id']) : '';
+        $building = isset($_POST['building_national_id']) ? wp_unslash($_POST['building_national_id']) : '';
+        $school_id = isset($_POST['school_id']) ? wp_unslash($_POST['school_id']) : '';
+        $saved = olama_core()->student_statistics()->save_school_config($school_id, $school, $building);
+        if (is_wp_error($saved)) wp_die(esc_html($saved->get_error_message()));
+        wp_safe_redirect(admin_url('admin.php?page=olama-users-ministry'));
+        exit;
     }
 
     public function assets($hook) {

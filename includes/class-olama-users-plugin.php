@@ -260,6 +260,11 @@ final class Olama_Users_Plugin {
                 array('id' => 'olama_users.capabilities', 'type' => 'submenu', 'label' => __('Manage capabilities', 'olama-users'), 'capability' => 'olama_users_matrix_manage'),
                 array('id' => 'olama_users.settings', 'type' => 'submenu', 'label' => __('Manage password settings', 'olama-users'), 'capability' => 'olama_users_settings_manage'),
                 array('id' => 'olama_users.audit', 'type' => 'submenu', 'label' => __('View audit log', 'olama-users'), 'capability' => 'olama_users_audit_view'),
+                array('id' => 'olama_users.ministry', 'type' => 'submenu', 'label' => 'البيانات الإحصائية للطلبة', 'capability' => 'olama_users_ministry_view',
+                    'actions' => array(
+                        array('id' => 'olama_users.ministry.review', 'type' => 'action', 'label' => 'مراجعة البيانات الإحصائية', 'capability' => 'olama_users_ministry_review'),
+                        array('id' => 'olama_users.ministry.configure', 'type' => 'action', 'label' => 'إعداد بيانات المدرسة الإحصائية', 'capability' => 'olama_users_ministry_configure'),
+                    )),
             ),
         ));
     }
