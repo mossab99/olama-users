@@ -4,3 +4,93 @@
 .olama-users-hero{display:flex;align-items:center;justify-content:space-between;gap:24px;margin:20px 0 24px;padding:28px 32px;border:1px solid #dbe3f0;border-radius:18px;background:linear-gradient(120deg,#172554,#4338ca);color:#fff;box-shadow:0 12px 30px rgba(30,41,99,.16)}.olama-users-hero h1{margin:5px 0 8px;color:#fff;font-size:30px}.olama-users-hero p{margin:0;color:#dbeafe;font-size:14px}.olama-users-hero>.dashicons{width:58px;height:58px;font-size:58px;color:#c7d2fe}.olama-eyebrow{display:block;color:#64748b;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}.olama-users-hero .olama-eyebrow{color:#c7d2fe}.olama-users-card{border-top:4px solid #4f46e5}.olama-users-card-employee{border-top-color:#0f766e}.olama-card-top{display:flex;align-items:center;justify-content:space-between}.olama-card-top h2{margin:0}.olama-card-top .dashicons{color:#818cf8}.olama-users-card-employee .olama-card-top .dashicons{color:#14b8a6}.olama-users-card>strong{margin-top:16px}.olama-users-card-employee>strong{color:#0f766e}.olama-card-actions form{display:flex;gap:8px}.olama-panel-heading{display:flex;align-items:center;justify-content:space-between;gap:18px}.olama-panel-heading h2{margin:4px 0 0}.olama-sync-mode{padding:5px 10px;border-radius:999px;background:#eef2ff;color:#3730a3;font-size:12px;font-weight:600}.olama-sync-table-wrap{overflow:auto;border:1px solid #e2e8f0;border-radius:10px}.olama-sync-table{border:0}.olama-sync-table th{background:#f8fafc;color:#475569;font-size:11px;text-transform:uppercase}.olama-sync-table td:nth-child(4){min-width:280px}.olama-sync-table code{background:#f1f5f9}@media(max-width:782px){.olama-users-hero{padding:22px}.olama-users-hero>.dashicons{display:none}.olama-card-actions form{flex-wrap:wrap}.olama-panel-heading{display:block}.olama-sync-mode{display:inline-block;margin-top:12px}}
 .olama-sync-table td:nth-child(4){white-space:normal;line-height:1.65;max-width:560px}.olama-sync-table td:last-child{white-space:nowrap}.olama-sync-batch-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px}.olama-sync-batch-actions form{margin:0}
 .olama-sync-batch-actions{margin:18px 0 14px;padding:16px 18px;border:1px solid #c7d2fe;border-radius:10px;background:#eef2ff;color:#1e1b4b}.olama-sync-batch-actions strong{margin-inline-end:6px}.olama-summary-item{min-height:76px}.olama-summary-item.is-invalid{width:100%;border:0;text-align:start;cursor:pointer;font:inherit}.olama-summary-item.is-invalid:hover{background:#fee2e2}.olama-summary-item.is-invalid span,.olama-summary-item.is-invalid strong,.olama-summary-item.is-invalid small{display:block}.olama-summary-item.is-invalid strong{color:#b91c1c}.olama-summary-item.is-invalid small{margin-top:4px;color:#b91c1c;font-size:11px}.olama-modal{display:none;position:fixed;inset:0;z-index:100000}.olama-modal[aria-hidden="false"]{display:block}.olama-modal-backdrop{position:absolute;inset:0;background:rgba(15,23,42,.58)}.olama-modal-dialog{position:relative;width:min(680px,calc(100% - 32px));max-height:calc(100vh - 64px);margin:32px auto;overflow:auto;border-radius:14px;background:#fff;box-shadow:0 24px 70px rgba(15,23,42,.28)}.olama-modal-heading{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid #e2e8f0}.olama-modal-heading h2{margin:0}.olama-modal-close{border:0;background:transparent;color:#64748b;font-size:28px;line-height:1;cursor:pointer}.olama-invalid-list{padding:12px 22px 22px}.olama-invalid-list article{padding:14px 0;border-bottom:1px solid #eef2f7}.olama-invalid-list article:last-child{border-bottom:0}.olama-invalid-list strong,.olama-invalid-list span{display:block}.olama-invalid-list span{margin-top:3px;color:#334155}.olama-invalid-list p{margin:6px 0 0;color:#b91c1c}.olama-modal-open{overflow:hidden}
+
+/* Ministry student statistics */
+.olama-ministry-admin{max-width:1480px;margin-inline-end:20px;color:#1e293b}
+.olama-ministry-admin *{box-sizing:border-box}
+.olama-ministry-hero{position:relative;display:flex;align-items:center;justify-content:space-between;gap:24px;overflow:hidden;margin:20px 0 22px;padding:30px 34px;border-radius:20px;background:linear-gradient(115deg,#18344a,#21476a 65%,#27677a);color:#fff;box-shadow:0 14px 34px rgba(24,52,74,.16)}
+.olama-ministry-hero::after{position:absolute;inset:auto auto -95px -40px;width:220px;height:220px;border:32px solid rgba(255,255,255,.06);border-radius:50%;content:"";pointer-events:none}
+.olama-ministry-hero h1{margin:8px 0 10px;color:#fff;font-size:29px;line-height:1.3}
+.olama-ministry-hero p{max-width:650px;margin:0;color:#d7e9f0;font-size:14px}
+.olama-ministry-eyebrow{display:block;color:#698194;font-size:11px;font-weight:700;letter-spacing:.07em}
+.olama-ministry-hero .olama-ministry-eyebrow{color:#aed0dc}
+.olama-ministry-hero-status{position:relative;z-index:1;display:inline-flex;align-items:center;gap:8px;flex:none;padding:10px 14px;border:1px solid rgba(255,255,255,.2);border-radius:999px;background:rgba(255,255,255,.11);font-weight:700;white-space:nowrap}
+.olama-ministry-hero-status>span{width:9px;height:9px;border-radius:50%;background:#f6bc58}
+.olama-ministry-hero-status.is-enabled>span{background:#62d4ad}
+.olama-ministry-panel{margin:0 0 18px;padding:22px 24px;border:1px solid #dce6ee;border-radius:16px;background:#fff;box-shadow:0 4px 16px rgba(25,54,74,.045)}
+.olama-ministry-section-head{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:18px}
+.olama-ministry-section-head h2{margin:5px 0 0;color:#18344a;font-size:19px;line-height:1.35}
+.olama-ministry-section-head p{margin:7px 0 0;color:#65798a}
+.olama-ministry-filter-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+.olama-ministry-filter-grid label,.olama-ministry-school-fields label{display:block;min-width:0}
+.olama-ministry-filter-grid label>span,.olama-ministry-school-fields label>span{display:block;margin-bottom:7px;color:#43596b;font-weight:700}
+.olama-ministry-filter-grid input,.olama-ministry-filter-grid select,.olama-ministry-school-fields input{width:100%;max-width:none;min-height:39px;margin:0;border-color:#ccdae4;border-radius:8px;background:#fbfdff}
+.olama-ministry-filter-grid input:focus,.olama-ministry-filter-grid select:focus,.olama-ministry-school-fields input:focus{border-color:#3d9595;box-shadow:0 0 0 2px rgba(61,149,149,.15)}
+.olama-ministry-form-actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:19px}
+.olama-ministry-admin .button{display:inline-flex;align-items:center;justify-content:center;min-height:36px;border-radius:8px}
+.olama-ministry-admin .button-primary{border-color:#287c80;background:#287c80}
+.olama-ministry-admin .button-primary:hover,.olama-ministry-admin .button-primary:focus{border-color:#1e696e;background:#1e696e}
+.olama-ministry-access-form{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap}
+.olama-ministry-access-choice{display:flex;align-items:flex-start;gap:12px;flex:1;min-width:250px;padding:14px 16px;border:1px solid #e0e9ee;border-radius:12px;background:#f7fafb}
+.olama-ministry-access-choice input{flex:none;margin:3px 0 0;width:19px;height:19px}
+.olama-ministry-access-choice strong,.olama-ministry-access-choice small{display:block}
+.olama-ministry-access-choice small{margin-top:5px;color:#65798a;line-height:1.5}
+.olama-ministry-schools{margin:24px 0 18px}
+.olama-ministry-school-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.olama-ministry-school-form{margin:0}
+.olama-ministry-school-form h3{margin:0;color:#18344a;font-size:17px}
+.olama-ministry-school-id{display:block;margin:5px 0 17px;color:#7c8f9d;font-size:12px}
+.olama-ministry-school-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-bottom:18px}
+.olama-ministry-overview{margin:26px 0 16px}
+.olama-ministry-period,.olama-ministry-count{padding:6px 12px;border-radius:999px;background:#eaf4f4;color:#246f72;font-weight:700}
+.olama-ministry-stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px}
+.olama-ministry-stat{position:relative;min-height:132px;padding:20px;border:1px solid #dce6ee;border-radius:15px;background:#fff;box-shadow:0 4px 16px rgba(25,54,74,.05)}
+.olama-ministry-stat::before{position:absolute;inset-inline-start:0;top:18px;bottom:18px;width:4px;border-radius:0 4px 4px 0;background:var(--ministry-accent,#59738a);content:""}
+.olama-ministry-stat .dashicons{float:left;width:36px;height:36px;padding:8px;border-radius:10px;background:var(--ministry-tint,#edf3f7);color:var(--ministry-accent,#59738a);font-size:20px}
+.olama-ministry-stat-label{display:block;max-width:calc(100% - 43px);color:#607586;font-weight:700}
+.olama-ministry-stat strong{display:block;margin-top:21px;color:#18344a;font-size:31px;line-height:1}
+.olama-ministry-stat.is-complete{--ministry-accent:#2a8b73;--ministry-tint:#e6f6ef}
+.olama-ministry-stat.is-family{--ministry-accent:#bd8129;--ministry-tint:#fff4df}
+.olama-ministry-stat.is-school{--ministry-accent:#427bb0;--ministry-tint:#eaf3fb}
+.olama-ministry-stat.is-review{--ministry-accent:#a45c71;--ministry-tint:#faedf1}
+.olama-ministry-cause-strip{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:0 0 10px;padding:12px 16px;border:1px solid #dce6ee;border-radius:12px;background:#f4f8fa;color:#496174}
+.olama-ministry-cause-strip>strong{margin-inline-end:7px;color:#18344a}
+.olama-ministry-cause-strip span{padding:6px 10px;border-radius:7px;background:#fff}
+.olama-ministry-cause-strip b{margin-inline-start:5px;color:#18344a}
+.olama-ministry-note{margin:0 0 22px;color:#687e8f;font-size:12px}
+.olama-ministry-detail-grid{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(280px,.8fr);gap:16px;align-items:start}
+.olama-ministry-table-scroll{overflow:auto;border:1px solid #e4ebf0;border-radius:10px}
+.olama-ministry-admin .olama-ministry-table{width:100%;min-width:600px;border:0;box-shadow:none}
+.olama-ministry-admin .olama-ministry-table th{padding:12px;background:#f3f8fa;color:#52697a;font-weight:700;white-space:nowrap}
+.olama-ministry-admin .olama-ministry-table td{padding:12px;vertical-align:middle;color:#334e60}
+.olama-ministry-admin .olama-ministry-table td:first-child{color:#18344a}
+.olama-ministry-admin .olama-ministry-table a{color:#217c83;font-weight:700;text-decoration:none}
+.olama-ministry-admin .olama-ministry-table a:hover{text-decoration:underline}
+.olama-ministry-table-empty,.olama-ministry-list-empty{padding:24px!important;color:#7a8e9d!important;text-align:center}
+.olama-ministry-missing-list{max-height:355px;overflow:auto;margin:0;padding:0;list-style:none}
+.olama-ministry-missing-list li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 2px;border-bottom:1px solid #edf1f4}
+.olama-ministry-missing-list li:last-child{border:0}
+.olama-ministry-missing-list a{color:#267b81;text-decoration:none;overflow-wrap:anywhere}
+.olama-ministry-missing-list a:hover{text-decoration:underline}
+.olama-ministry-missing-list strong{flex:none;min-width:34px;padding:5px 8px;border-radius:7px;background:#eef5f5;color:#246f72;text-align:center}
+.olama-ministry-badge{display:inline-block;padding:5px 9px;border-radius:999px;background:#edf3f7;color:#52697a;font-size:12px;font-weight:700;white-space:nowrap}
+.olama-ministry-badge.is-complete{background:#e6f6ef;color:#26775f}
+.olama-ministry-badge.is-needs_family{background:#fff2db;color:#9b651d}
+.olama-ministry-badge.is-needs_school{background:#e8f1fa;color:#346d9f}
+.olama-ministry-badge.is-needs_review{background:#faedf1;color:#99536a}
+.olama-ministry-review-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.olama-ministry-review{padding:18px;border:1px solid #e0e9ee;border-radius:12px;background:#fbfdfe}
+.olama-ministry-review-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.olama-ministry-review-head strong{color:#18344a}
+.olama-ministry-review-head time,.olama-ministry-review-field{color:#718797;font-size:12px}
+.olama-ministry-review-field{margin:6px 0 14px}
+.olama-ministry-review-values{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.olama-ministry-review-values>div{padding:12px;border:1px solid #e4ebf0;border-radius:9px;background:#fff;overflow-wrap:anywhere}
+.olama-ministry-review-values span,.olama-ministry-review-values strong{display:block}
+.olama-ministry-review-values span{margin-bottom:7px;color:#768b9b;font-size:12px}
+.olama-ministry-review-values strong{color:#203c4e}
+.olama-ministry-review-actions{display:flex;gap:8px;margin-top:14px}
+.olama-ministry-review-actions form{margin:0}
+@media(max-width:1200px){.olama-ministry-stats{grid-template-columns:repeat(3,minmax(0,1fr))}.olama-ministry-filter-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:900px){.olama-ministry-detail-grid,.olama-ministry-school-grid,.olama-ministry-review-grid{grid-template-columns:1fr}.olama-ministry-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.olama-ministry-admin{margin-inline-end:10px}.olama-ministry-hero{display:block;padding:24px}.olama-ministry-hero h1{font-size:23px}.olama-ministry-hero-status{margin-top:20px}.olama-ministry-panel{padding:18px}.olama-ministry-filter-grid,.olama-ministry-school-fields,.olama-ministry-review-values{grid-template-columns:1fr}.olama-ministry-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.olama-ministry-stat{min-height:116px;padding:16px}.olama-ministry-stat strong{font-size:26px}}
