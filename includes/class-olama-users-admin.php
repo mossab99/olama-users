@@ -46,6 +46,9 @@ class Olama_Users_Admin {
         $family_form_enabled = (bool) get_option('olama_ministry_family_enabled', false);
         echo '<header class="olama-ministry-hero"><div><span class="olama-ministry-eyebrow">أولاما / بيانات الوزارة</span><h1>البيانات الإحصائية للطلبة</h1><p>تابع اكتمال بيانات الطلبة، راجع طلبات الأسر، واضبط بيانات المدرسة من مكان واحد.</p></div>';
         echo '<span class="olama-ministry-hero-status ' . ($family_form_enabled ? 'is-enabled' : 'is-disabled') . '"><span aria-hidden="true"></span>نموذج الأسرة ' . ($family_form_enabled ? 'متاح' : 'متوقف') . '</span></header>';
+        if (function_exists('olama_emis_students')) {
+            echo '<p><a class="button button-primary" href="' . esc_url(admin_url('admin.php?page=olama-emis-students')) . '">فتح سجل الطلاب في OLAMA EMIS</a></p>';
+        }
         if (isset($_GET['ministry_family_saved'])) {
             echo '<div class="notice notice-success is-dismissible"><p>تم حفظ إعداد نموذج الأسرة.</p></div>';
         }
